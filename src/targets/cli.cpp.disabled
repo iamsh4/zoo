@@ -1,0 +1,903 @@
+// vim: expandtab:ts=2:sw=2
+
+#include <iostream>
+#include <cstdio>
+#include <list>
+#include <set>
+#include <unordered_map>
+
+#include <unistd.h>
+#include <termios.h>
+#include <sys/types.h>
+#include <sys/ioctl.h>
+#include <sys/stat.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <errno.h>
+
+#include "core/console.h"
+#include "core/memtable.h"
+#include "cpu/debug.h"
+#include "cpu/sh4.h"
+#include "peripherals/modem.h"
+#include "shared/log.h"
+#include "shared/ansi_color_constants.h"
+#include "shared/parsing.h"
+
+#include "gpu/graphics_registers.h"
+
+static std::atomic<bool> ctrlc_interrupt;
+
+std::set<u32> breakpoints;
+
+Log::Logger<Log::LogModule::PENGUIN> logger;
+
+std::list<std::string>
+split(const std::string &src, const char *separators)
+{
+  std::list<std::string> result;
+
+  fflush(stdout);
+
+  auto begin = src.find_first_not_of(separators);
+  if (begin == std::string::npos) {
+    return result;
+  }
+
+  auto end = src.find_first_of(separators, begin);
+  while (end != std::string::npos) {
+    result.push_back(src.substr(begin, end - begin));
+    begin = src.find_first_not_of(separators, end);
+    end = src.find_first_of(separators, begin);
+  }
+
+  if (begin != std::string::npos) {
+    result.push_back(src.substr(begin, end));
+  }
+
+  return result;
+}
+
+typedef std::list<std::string> &arguments;
+typedef std::function<int(Console *, arguments)> command_fn;
+
+struct command_entry
+{
+  const bool terminal;
+  const std::map<std::string, const command_entry &> *sub_commands;
+  const command_fn callback;
+  const unsigned arguments;
+
+  command_entry(const std::map<std::string, const command_entry &> &subs)
+    : terminal(false), sub_commands(&subs), callback(nullptr), arguments(1u)
+  {
+    return;
+  }
+
+  command_entry(command_fn callback, unsigned arguments)
+    : terminal(true), sub_commands(nullptr), callback(callback), arguments(arguments)
+  {
+    return;
+  }
+};
+
+typedef std::map<std::string, const command_entry &> command_map;
+
+const command_entry cmd_info_registers(
+  [](Console *console, arguments) {
+    console->cpu()->registers().write(std::cout);
+    std::cout << "ICount " << console->cpu()->get_instructions_executed_since_reset()
+              << std::endl;
+    return 0;
+  },
+  0u);
+
+const command_entry cmd_info_float(
+  [](Console *console, arguments) {
+    console->cpu()->fpu_registers().write(std::cout);
+    return 0;
+  },
+  0u);
+
+const command_map root_info_commands = { { "registers", cmd_info_registers },
+                                         { "float", cmd_info_float } };
+
+const command_entry cmd_info(root_info_commands);
+
+const command_entry cmd_interrupt_normal(
+  [](Console *console, arguments args) {
+    if (args.size() != 3u) {
+      printf("Usage: debug interrupt normal %%Index\n");
+      return 0;
+    }
+
+    u32 bit = (u32)std::stoi(*std::next(args.begin(), 2u));
+    console->interrupt_normal(bit);
+
+    return 0;
+  },
+  1u);
+
+const command_map root_interrupt_commands = { { "normal", cmd_interrupt_normal } };
+
+const command_entry cmd_interrupt(root_interrupt_commands);
+
+const command_map root_debug_commands = { { "interrupt", cmd_interrupt } };
+
+const command_entry cmd_debug(root_debug_commands);
+
+const command_entry cmd_continue([](Console *, arguments) { return 1; }, 0u);
+
+const command_entry cmd_step(
+  [](Console *console, arguments args) {
+    u32 steps = 1;
+    if (args.size() >= 1) {
+      steps = (u32)std::stoi(*args.begin());
+    }
+
+    while (steps-- != 0) {
+      const u32 PC = console->cpu()->registers().PC;
+      try {
+        const u16 fetch = console->cpu()->mem_read<u16>(PC);
+        printf("[%08x] %s\n", PC, cpu::Debugger::disassemble(fetch, PC).c_str());
+      } catch (std::exception &e) {
+        printf("[%08x] ???? (Address not mapped)\n", PC);
+      }
+
+      try {
+        console->cpu()->step();
+      } catch (std::exception &e) {
+        std::cout << "Caught CPU exception at instruction: " << e.what() << std::endl;
+      }
+    }
+    return 0;
+  },
+  0u);
+
+const command_entry cmd_break(
+  [](Console *, arguments args) {
+    if (args.size() == 1) {
+      breakpoints.insert(parse_long(*args.cbegin()));
+    } else if (args.empty()) {
+      printf("Active breakpoints:\n");
+      for (const auto entry : breakpoints) {
+        printf(" - 0x%08x\n", entry);
+      }
+    }
+
+    return 0;
+  },
+  1u);
+
+const command_entry cmd_delete(
+  [](Console *, arguments args) {
+    if (args.empty()) {
+      return 0;
+    }
+
+    const u32 address = parse_long(*args.cbegin());
+    const auto it = breakpoints.find(address);
+    if (it == breakpoints.end()) {
+      printf("No breakpoint for address 0x%08x\n", address);
+      return 0;
+    }
+
+    breakpoints.erase(it);
+
+    return 0;
+  },
+  1u);
+
+const command_entry cmd_watch(
+  [](Console *console, arguments args) {
+    if (args.size() != 2) {
+      printf("Usage: watch <write|read> <address>\n");
+      return 0;
+    }
+
+    auto args_iterator = args.cbegin();
+    const std::string mode = *args_iterator;
+    args_iterator++;
+    const u32 address = parse_long(*args_iterator);
+
+    if (mode == std::string("write") || mode == std::string("+write")) {
+      console->memory()->addWriteWatch(address);
+      printf("Added watch for writes @ 0x%08x..\n", address);
+    } else if (mode == std::string("-write")) {
+      console->memory()->removeWriteWatch(address);
+      printf("Removed watch for writes @ 0x%08x..\n", address);
+    } else if (mode == std::string("read") || mode == std::string("+read")) {
+      console->memory()->addReadWatch(address);
+      printf("Added watch for reads @ 0x%08x..\n", address);
+    } else if (mode == std::string("-read")) {
+      console->memory()->removeReadWatch(address);
+      printf("Removed watch for reads @ 0x%08x..\n", address);
+    } else {
+      printf("Invalid mode. Must be read/write.\n");
+    }
+
+    return 0;
+  },
+  1u);
+
+const command_entry cmd_reset(
+  [](Console *hw, arguments) {
+    hw->cpu()->reset();
+    return 0;
+  },
+  0u);
+
+const command_entry cmd_log_level(
+  [](Console *, arguments args) {
+    static std::unordered_map<std::string, Log::LogLevel> name_to_level = {
+      { "info", Log::LogLevel::Info },       { "warn", Log::LogLevel::Warn },
+      { "error", Log::LogLevel::Error },     { "debug", Log::LogLevel::Debug },
+      { "verbose", Log::LogLevel::Verbose }, { "none", Log::LogLevel::None }
+    };
+
+    static std::unordered_map<unsigned, std::string> level_to_name = {
+      { Log::LogLevel::Info, "info" },       { Log::LogLevel::Warn, "warn" },
+      { Log::LogLevel::Error, "error" },     { Log::LogLevel::Debug, "debug" },
+      { Log::LogLevel::Verbose, "verbose" }, { Log::LogLevel::None, "none" }
+    };
+
+    if (args.size() == 2) {
+      const std::string new_level = *std::next(args.begin());
+      if (name_to_level.find(new_level) != name_to_level.end()) {
+        Log::level = name_to_level[new_level];
+        printf("Adjusted log level to %s\n", new_level.c_str());
+      } else {
+        printf("Invalid log level specified.\n");
+      }
+    } else if (args.size() == 1) {
+      printf("Current log level is %s\n", level_to_name[Log::level].c_str());
+    } else {
+      printf("Usage: log level [NewLevel]\n");
+    }
+
+    return 0;
+  },
+  1u);
+
+const command_entry cmd_log_show(
+  [](Console *, arguments args) {
+    static std::unordered_map<std::string, Log::LogModule> name_to_module = {
+      { "sh4", Log::LogModule::SH4 },           { "gdrom", Log::LogModule::GDROM },
+      { "maple", Log::LogModule::MAPLE },       { "graphcis", Log::LogModule::GRAPHICS },
+      { "gui", Log::LogModule::GUI },           { "audio", Log::LogModule::AUDIO },
+      { "modem", Log::LogModule::MODEM },       { "holly", Log::LogModule::HOLLY },
+      { "memtable", Log::LogModule::MEMTABLE }, { "penguin", Log::LogModule::PENGUIN },
+    };
+
+    if (args.size() == 2) {
+      const std::string module_name = *std::next(args.begin());
+      if (module_name == "all") {
+        Log::module_show_all();
+      } else {
+        if (name_to_module.find(module_name) != name_to_module.end()) {
+          Log::module_show(name_to_module[module_name]);
+        } else {
+          printf("Invalid module name specified. %s\n", module_name.c_str());
+        }
+      }
+    } else {
+      printf("Usage: log show <module>\n");
+    }
+
+    return 0;
+  },
+  1u);
+
+const command_entry cmd_log_hide(
+  [](Console *, arguments args) {
+    static std::unordered_map<std::string, Log::LogModule> name_to_module = {
+      { "sh4", Log::LogModule::SH4 },           { "gdrom", Log::LogModule::GDROM },
+      { "maple", Log::LogModule::MAPLE },       { "graphics", Log::LogModule::GRAPHICS },
+      { "gui", Log::LogModule::GUI },           { "audio", Log::LogModule::AUDIO },
+      { "modem", Log::LogModule::MODEM },       { "holly", Log::LogModule::HOLLY },
+      { "memtable", Log::LogModule::MEMTABLE }, { "penguin", Log::LogModule::PENGUIN },
+    };
+
+    if (args.size() == 2) {
+      const std::string module_name = *std::next(args.begin());
+      if (module_name == "all") {
+        Log::module_hide_all();
+      } else {
+        if (name_to_module.find(module_name) != name_to_module.end()) {
+          Log::module_hide(name_to_module[module_name]);
+        } else {
+          printf("Invalid module name specified.\n");
+        }
+      }
+    } else {
+      printf("Usage: log show <module>\n");
+    }
+
+    return 0;
+  },
+  1u);
+
+const command_map root_log_commands = {
+  { "level", cmd_log_level },
+  { "show", cmd_log_show },
+  { "hide", cmd_log_hide },
+};
+
+const command_entry cmd_log(root_log_commands);
+
+const command_entry cmd_disassemble(
+  [](Console *console, arguments args) {
+    static u32 previous_display = 0u;
+    static constexpr u32 context_size = 0x10;
+
+    if (args.size() > 1u) {
+      printf("Usage: disassemble [%%PC]\n");
+      return 0;
+    }
+
+    // Assume disassemble from PC, otherwise parse the passed in address
+    const u32 PC = console->cpu()->registers().PC;
+    u32 center = PC;
+    if (args.size() == 1u) {
+      if ((*args.cbegin()) == "+") {
+        center = previous_display + (context_size * 2u);
+      } else {
+        center = parse_long(*args.cbegin());
+      }
+    }
+
+    previous_display = center;
+
+    const u32 from_PC = center > context_size ? center - context_size : 0u;
+    const u32 to_PC = center + context_size;
+
+    for (u32 addr = from_PC; addr < to_PC; addr += 2u) {
+      try {
+        const u16 fetch = console->cpu()->mem_read<u16>(addr);
+        printf("%s [%08x] %s\n",
+               addr == PC ? "=>" : "  ",
+               addr,
+               cpu::Debugger::disassemble(fetch, addr).c_str());
+      } catch (std::exception &e) {
+        printf("%s [%08x] ???? (Address not mapped)\n", addr == PC ? "=>" : "  ", addr);
+      }
+    }
+
+    return 0;
+  },
+  1u);
+
+const command_entry cmd_hex(
+  [](Console *console, arguments args) {
+    if (args.size() < 1u || args.size() > 2u) {
+      printf("Usage: hex %%address %%bytes\n");
+      return 0;
+    }
+
+    u32 address = parse_long(*args.cbegin());
+
+    u32 bytes;
+    if (args.size() == 2u)
+      bytes = parse_long(*std::next(args.cbegin(), 1u));
+    else
+      bytes = 1024;
+
+    const u32 end_address = address + bytes;
+    do {
+      printf("%08x | ", address);
+      for (u32 i = 0; i < 16 && address < end_address; ++i) {
+        const u8 byte = console->cpu()->mem_read<u8>(address);
+        printf("%02x ", byte);
+        address++;
+      }
+      printf("\n");
+    } while (address < end_address);
+
+    return 0;
+  },
+  1u);
+
+const command_entry cmd_hex32(
+  [](Console *console, arguments args) {
+    if (args.size() < 1u || args.size() > 2u) {
+      printf("Usage: hex32 %%address %%bytes\n");
+      return 0;
+    }
+
+    u32 address = parse_long(*args.cbegin());
+
+    u32 bytes;
+    if (args.size() == 2u)
+      bytes = parse_long(*std::next(args.cbegin(), 1u));
+    else
+      bytes = 1024;
+
+    const u32 end_address = address + bytes;
+    do {
+      printf("%08x | ", address);
+      for (u32 i = 0; i < 16 && address < end_address; i += 4) {
+        const u32 word = console->cpu()->mem_read<u32>(address);
+
+        bool is_bios_addr = word >= 0x8c000000 && word <= 0x8c200000;
+        bool is_bios_local = word >= 0x8c200000 && word <= 0x8c300000;
+        bool is_mmio_addr =
+          (0x1FFFFFFF & word) >= 0x005F6000 && (0x1FFFFFFF & word) < 0x005FA000;
+
+        if (is_bios_addr)
+          printf("%s%s%08x%s ", ANSI_BOLD_ON, ANSI_COLOR_BLUE, word, ANSI_COLOR_RESET);
+        else if (is_bios_local)
+          printf("%s%s%08x%s ", ANSI_BOLD_ON, ANSI_COLOR_MAGENTA, word, ANSI_COLOR_RESET);
+        else if (is_mmio_addr)
+          printf("%s%s%08x%s ", ANSI_BOLD_ON, ANSI_COLOR_GREEN, word, ANSI_COLOR_RESET);
+        else
+          printf("%08x ", word);
+
+        address += 4;
+      }
+      printf("\n");
+    } while (address < end_address);
+
+    return 0;
+  },
+  1u);
+
+const command_entry cmd_dump(
+  [](Console *console, arguments args) {
+    if (args.size() != 3u) {
+      printf("Usage: read %%adddress %%bytes %%filename\n");
+      return 0;
+    }
+
+    FILE *fp = NULL;
+    try {
+      const u32 address = parse_long(*args.cbegin());
+      const u32 bytes = parse_long(*std::next(args.cbegin(), 1u));
+      const std::string filename = *std::next(args.cbegin(), 2u);
+
+      fp = fopen(filename.c_str(), "wb");
+      for (size_t i = 0u; i < bytes; ++i) {
+        const u8 result = console->cpu()->mem_read<u8>(address + i);
+        fwrite(&result, 1u, 1u, fp);
+      }
+    } catch (std::exception &e) {
+      printf("Address not readable: %s\n", e.what());
+    }
+
+    if (fp != NULL) {
+      fclose(fp);
+    }
+
+    return 0;
+  },
+  3u);
+
+const command_entry cmd_read(
+  [](Console *console, arguments args) {
+    if (args.size() != 1u) {
+      printf("Usage: read %%adddress\n");
+      return 0;
+    }
+
+    try {
+      const u32 address = parse_long(*args.cbegin());
+      const u32 result = console->cpu()->mem_read<u32>(address);
+      printf("*(u32 *) %x => %x\n", address, result);
+    } catch (std::exception &e) {
+      printf("Address not readable: %s\n", e.what());
+    }
+
+    return 0;
+  },
+  1u);
+
+const command_entry cmd_write(
+  [](Console *console, arguments args) {
+    if (args.size() != 2u) {
+      printf("Usage: write %%adddress %%value\n");
+      return 0;
+    }
+
+    try {
+      const u32 address = parse_long(*args.cbegin());
+      const u32 target = parse_long(*std::next(args.cbegin()));
+      console->cpu()->mem_write<u32>(address, target);
+      printf("*(u32 *) %x <= %x\n", address, target);
+    } catch (std::exception &e) {
+      printf("Address not writable: %s\n", e.what());
+    }
+
+    return 0;
+  },
+  2u);
+
+const command_entry cmd_quit([](Console *, arguments) { return -1; }, 0u);
+
+const command_map root_commands = { { "info", cmd_info },
+                                    { "continue", cmd_continue },
+                                    { "step", cmd_step },
+                                    { "break", cmd_break },
+                                    { "delete", cmd_delete },
+                                    { "watch", cmd_watch },
+                                    { "disassemble", cmd_disassemble },
+                                    { "read", cmd_read },
+                                    { "write", cmd_write },
+                                    { "hex", cmd_hex },
+                                    { "hex32", cmd_hex32 },
+                                    { "dump", cmd_dump },
+                                    { "debug", cmd_debug },
+                                    { "quit", cmd_quit },
+                                    { "log", cmd_log },
+                                    { "reset", cmd_reset } };
+
+std::pair<command_map::const_iterator, command_map::const_iterator>
+debugger_match_cmd(const std::string &input, bool for_execute)
+{
+  const bool end_trails = (*input.rbegin() != ' ');
+  const std::list<std::string> split_input = split(input, " \r\n\t");
+  std::list<std::string>::const_iterator cmd_it = split_input.begin();
+  const command_map *from = &root_commands;
+
+  while (cmd_it != split_input.end()) {
+    const bool last_entry = (std::next(cmd_it, 1u) == split_input.end());
+
+    command_map::const_iterator first_it = from->lower_bound(*cmd_it);
+    if (first_it == from->end() ||
+        first_it->first.compare(0u, cmd_it->size(), *cmd_it) != 0u) {
+      /* No possible command */
+      return std::make_pair(from->end(), from->end());
+    }
+
+    /* Scan until we hit first not-possible command from prefix */
+    command_map::const_iterator last_it = std::next(first_it, 1u);
+    while (last_it != from->end()) {
+      if (last_it->first.compare(0u, cmd_it->size(), *cmd_it) != 0) {
+        break;
+      }
+      ++last_it;
+    }
+
+    /* Ends in command without trailing whitespace - try completing it */
+    if (last_entry && !for_execute) {
+      if (end_trails) {
+        if (*cmd_it != first_it->first) {
+          return std::make_pair(first_it, last_it);
+        } else {
+          return std::make_pair(from->end(), from->end());
+        }
+      } else if (first_it->second.terminal) {
+        return std::make_pair(from->end(), from->end());
+      } else {
+        from = first_it->second.sub_commands;
+        return std::make_pair(from->begin(), from->end());
+      }
+    }
+
+    if (std::next(first_it, 1u) == last_it) {
+      if (first_it->second.terminal) {
+        return std::make_pair(first_it, last_it);
+      } else {
+        from = first_it->second.sub_commands;
+      }
+    } else if (last_entry == true) {
+      /* Ambiguous final - give suggestions */
+    } else {
+      /* Ambiguous interior command */
+      return std::make_pair(from->end(), from->end());
+    }
+
+    ++cmd_it;
+  }
+
+  return std::make_pair(from->begin(), from->end());
+}
+
+void
+debugger_cmd(const std::string &input)
+{
+  const std::list<std::string> split_input = split(input, " \r\n\t");
+}
+
+void
+debugger_complete(std::string *input)
+{
+  const std::list<std::string> split_input = split(*input, " \r\n\t");
+}
+
+void
+__complete(std::string *dst, const std::string &src, bool terminal)
+{
+  size_t last_sep = dst->find_last_of(" \r\n\t");
+  if (last_sep == std::string::npos) {
+    last_sep = 0u;
+  } else {
+    last_sep++;
+  }
+
+  const size_t portion_already = dst->size() - last_sep;
+  dst->resize(last_sep);
+  (*dst) += src;
+  if (!terminal) {
+    (*dst) += ' ';
+  }
+
+  write(1, src.data() + portion_already, src.size() - portion_already);
+  if (!terminal) {
+    write(1, " ", 1);
+  }
+}
+
+/* XXX */
+std::list<std::string> command_history;
+
+int
+debugger_read(Console *console, std::string *last_line)
+{
+  std::list<std::string>::iterator history_it = command_history.end();
+  std::string line, local_line;
+
+  write(1, "(pen) ", 6);
+
+  while (1) {
+    char c;
+    const int result = read(0, &c, 1);
+
+    /* EOF */
+    if (result == 0 || c == 0x04) {
+      write(1, "\n", 1);
+      last_line->resize(0u);
+      return 0;
+    }
+
+    if (c == '\n' || c == '\r') {
+      break;
+    }
+
+    /* Backspace */
+    if (c == 0x7f || c == 0x08) {
+      if (!line.empty()) {
+        write(1, "\b \b", 3);
+        /* XXX rewrite in middle? */
+        line.resize(line.size() - 1u);
+      }
+      continue;
+    }
+
+    /* Arrow keys */
+    if (c == 0x1b) {
+      char raw[4];
+
+      read(0, raw, 2);
+
+      if (raw[0] == 0x5b) {
+        switch (raw[1]) {
+          case 0x41:
+            /* Up Arrow */
+            if (history_it == command_history.end()) {
+              /* Scroll up next first */
+              history_it = command_history.begin();
+              for (unsigned i = 0; i < line.size(); ++i) {
+                raw[0] = '\b';
+                raw[1] = ' ';
+                raw[2] = '\b';
+                write(1, raw, 3);
+              }
+
+              line = *history_it;
+              write(1, line.data(), line.size());
+            } else if (std::next(history_it) != command_history.end()) {
+              /* Scroll up next */
+              ++history_it;
+
+              for (unsigned i = 0; i < line.size(); ++i) {
+                raw[0] = '\b';
+                raw[1] = ' ';
+                raw[2] = '\b';
+                write(1, raw, 3);
+              }
+
+              line = *history_it;
+              write(1, line.data(), line.size());
+            }
+            break;
+
+          case 0x42:
+            /* Down Arrow */
+            if (history_it != command_history.end()) {
+              if (history_it != command_history.begin()) {
+                /* Scroll down next */
+                history_it = std::prev(history_it);
+
+                for (unsigned i = 0; i < line.size(); ++i) {
+                  raw[0] = '\b';
+                  raw[1] = ' ';
+                  raw[2] = '\b';
+                  write(1, raw, 3);
+                }
+
+                line = *history_it;
+                write(1, line.data(), line.size());
+              } else {
+                /* Scroll down first */
+                history_it = command_history.end();
+
+                for (unsigned i = 0; i < line.size(); ++i) {
+                  raw[0] = '\b';
+                  raw[1] = ' ';
+                  raw[2] = '\b';
+                  write(1, raw, 3);
+                }
+
+                line = local_line;
+                write(1, line.data(), line.size());
+              }
+            }
+            break;
+
+          default:
+            break;
+        }
+      }
+
+      continue;
+    }
+
+    /* Tab auto-complete */
+    if (c == '\t') {
+      auto possible = debugger_match_cmd(line, false);
+
+      if (possible.first == possible.second) {
+        /* No possible command */
+        write(1, "\a", 1);
+        continue;
+      }
+
+      if (std::next(possible.first, 1u) == possible.second) {
+        __complete(&line, possible.first->first, possible.first->second.arguments == 0u);
+      } else {
+        write(1, "\n", 1u);
+        for (auto it = possible.first; it != possible.second; ++it) {
+          write(1, it->first.data(), it->first.size());
+          write(1, " ", 1);
+        }
+        write(1, "\n(pen) ", 7);
+        write(1, line.data(), line.size());
+      }
+
+      local_line = line;
+      continue;
+    }
+
+    line.push_back(c);
+    local_line = line;
+
+    write(1, &c, 1);
+  }
+
+  if (line.empty()) {
+    if (!last_line->empty()) {
+      write(1, last_line->data(), last_line->size());
+      line = *last_line;
+    }
+  }
+
+  write(1, "\n", 1);
+
+  if (line.empty()) {
+    return 0;
+  }
+
+  auto cmd = debugger_match_cmd(line, true);
+  if (cmd.first == cmd.second) {
+    printf("Command malformed or not implemented\n\n");
+    fflush(stdout);
+    return 0;
+  }
+
+  if (!cmd.first->second.terminal) {
+    printf("Command not complete (requires sub-command)\n\n");
+    fflush(stdout);
+    return 0;
+  }
+
+  if (std::next(cmd.first) != cmd.second) {
+    printf("Command is ambiguous\n\n");
+    fflush(stdout);
+    return 0;
+  }
+
+  command_history.push_front(line);
+  std::list<std::string> args = split(line, " \r\t\n");
+  args.erase(args.begin(), std::next(args.begin(), 1u));
+
+  const int result = cmd.first->second.callback(console, args);
+  switch (result) {
+    case -1: /* Quit */
+      return 1;
+
+    case 1: /* Continue */
+      return 2;
+  }
+
+  *last_line = line;
+
+  return 0;
+}
+
+int
+debugger_loop(Console *console)
+{
+  struct termios tio, tio_orig;
+
+  /* Prevent echoing / disable line mode */
+  tcgetattr(0, &tio_orig);
+  tcgetattr(0, &tio);
+
+  tio.c_iflag &= ~(IGNCR);
+  tio.c_lflag &= ~(ECHO | VINTR | ICANON);
+
+  if (tcsetattr(0, TCSAFLUSH, &tio) != 0) {
+    return -ENOTTY;
+  }
+
+  std::string cmd;
+  int exit = 0;
+  while (exit == 0) {
+    switch (debugger_read(console, &cmd)) {
+      case 0:
+        continue;
+
+      case 1: /* Quit */
+        exit = 1;
+        break;
+
+      case 2: /* Continue */
+        ctrlc_interrupt.store(false);
+        bool first = true;
+        try {
+          while (!ctrlc_interrupt.load(std::memory_order_relaxed)) {
+            if (!first && !breakpoints.empty()) {
+              auto it = breakpoints.find(console->cpu()->registers().PC);
+              if (it != breakpoints.end()) {
+                std::cout << std::endl;
+                std::cout << "Execution halted: Breakpoint @ 0x" << hex_format(*it).str()
+                          << std::endl
+                          << std::endl;
+                break;
+              }
+            }
+
+            console->cpu()->step();
+            first = false;
+          }
+        } catch (std::exception &e) {
+          std::cout << std::endl;
+          std::cout << "Execution halted: Caught CPU interrupt" << std::endl;
+          std::cout << e.what() << std::endl << std::endl;
+        }
+        break;
+    }
+  }
+
+  /* Reset terminal mode */
+  tcsetattr(0, TCSAFLUSH, &tio_orig);
+
+  return 0;
+}
+
+void
+debugger_interrupt(int signum)
+{
+  ctrlc_interrupt.store(true);
+}
+
+int
+main(int argc, char *argv[])
+{
+  /* Max phys address on dreamcast is 0x1BFFFFFF (~450MiB)  */
+  Console dreamcast;
+
+  signal(SIGINT, debugger_interrupt);
+  debugger_loop(&dreamcast);
+
+  return 0;
+}

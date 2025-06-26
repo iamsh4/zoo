@@ -1,0 +1,4 @@
+include_rules
+
+: sh4_opcode.in |> ^ CODEGEN %o^ ./sh4_opcode.py %f > %o |> %B.cpp $(NEEDS_CODEGEN)
+: foreach *.cpp |> !cpp |> %B.o $(GROUP_ZOO)

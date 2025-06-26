@@ -1,0 +1,4 @@
+include_rules
+
+: |> ^ CP webgpu_native.so^ cp third_party/wgpu-native/target/debug/libwgpu_native.so %o \
+  |> $(VARIANT_ROOT)/lib/libwgpu_native.so $(NEEDS_WEBGPU)

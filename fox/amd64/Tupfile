@@ -1,0 +1,6 @@
+include_rules
+
+: amd64_assembler.csv |> ^ CODEGEN %o^ ./amd64.py %f %o |> %B.h $(NEEDS_CODEGEN)
+: amd64_assembler.csv |> ^ CODEGEN %o^ ./amd64.py %f %o |> %B.cpp $(NEEDS_CODEGEN)
+
+: foreach *.cpp |> !cpp |> %B.o $(GROUP_LIBFOX)

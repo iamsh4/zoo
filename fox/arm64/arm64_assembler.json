@@ -1,0 +1,457 @@
+{
+  "documentation": "https://montcs.bloomu.edu/Information/ARMv8/ARMv8-A_Architecture_Reference_Manual_(Issue_A.a).pdf",
+  "instruction_categories":[
+
+{
+  "section": "C2.2.1",
+  "category": "LDR/STR (immediate offset)",
+  "encoding": "size:2|111|v:1|01|opc:2|imm2:12|Rn|Rt",
+  "instructions": [
+    {"asm": "STR <Wt>, [<Xn>{, #<imm>}]", "size":2, "v": 0, "opc": 0, "imm2": "Immediate imm2 { imm.value / 4 };"},
+    {"asm": "STR <Xt>, [<Xn>{, #<imm>}]", "size":3, "v": 0, "opc": 0, "imm2": "Immediate imm2 { imm.value / 8 };"},
+    {"asm": "STR <St>, [<Xn>{, #<imm>}]", "size":2, "v": 1, "opc": 0, "imm2": "Immediate imm2 { imm.value / 4 };"},
+    {"asm": "STR <Dt>, [<Xn>{, #<imm>}]", "size":3, "v": 1, "opc": 0, "imm2": "Immediate imm2 { imm.value / 8 };"},
+    {"asm": "LDR <Wt>, [<Xn>{, #<imm>}]", "size":2, "v": 0, "opc": 1, "imm2": "Immediate imm2 { imm.value / 4 };"},
+    {"asm": "LDR <Xt>, [<Xn>{, #<imm>}]", "size":3, "v": 0, "opc": 1, "imm2": "Immediate imm2 { imm.value / 8 };"},
+    {"asm": "LDR <St>, [<Xn>{, #<imm>}]", "size":2, "v": 1, "opc": 1, "imm2": "Immediate imm2 { imm.value / 4 };"},
+    {"asm": "LDR <Dt>, [<Xn>{, #<imm>}]", "size":3, "v": 1, "opc": 1, "imm2": "Immediate imm2 { imm.value / 8 };"}
+  ]
+},
+
+{
+  "section": "C2.2.1.LDR",
+  "category": "LDR (immediate offset)",
+  "encoding": "size:2|111|0|01|01|imm2:12|Rn|Rt",
+  "instructions": [
+    
+  ]
+},
+
+{
+  "section": "C3.2.1",
+  "category": "Compare and branch (immediate)",
+  "encoding": "sf:1|011010|op:1|imm:19|Rt",
+  "instructions": [
+    {"asm": "CBZ <Wt>, <label>",  "sf": 0, "op": 0},
+    {"asm": "CBNZ <Wt>, <label>", "sf": 0, "op": 1},
+    {"asm": "CBZ <Xt>, <label>",  "sf": 1, "op": 0},
+    {"asm": "CBNZ <Xt>, <label>", "sf": 1, "op": 1}
+  ]
+},
+
+{
+  "section": "C3.2.2",
+  "category": "Conditional branch (immediate)",
+  "encoding": "0101010|0|imm:19|0|cond",
+  "instructions": [
+    {"asm": "B.<cond> <label>"}
+  ]
+},
+
+{
+  "section": "C3.2.6",
+  "category": "Unconditional branch (immediate)",
+  "encoding": "op:1|00101|imm:26",
+  "instructions": [
+    {"asm": "B <label>", "op": 0},
+    {"asm": "BL <label>", "op": 1}
+  ]
+},
+
+{
+  "section": "C3.2.7",
+  "category": "Unconditional branch (register)",
+  "encoding": "1101011|opc:4|11111|000000|Rn|00000",
+  "instructions": [
+    {"asm": "BR <Xn>",  "opc": 0},
+    {"asm": "BLR <Xn>", "opc": 1},
+    {"asm": "RET <Xn>", "opc": 2, "_defaults": { "Xn": 30 } }
+  ]
+},
+
+{
+  "section": "C3.3.5",
+  "category": "Load register (literal)",
+  "encoding": "opc:2|011|V:1|00|imm:19|Rt",
+  "TODO": ["Should represent imm as 'simm' signed CPP type"],
+  "instructions": [
+    {"asm": "LDR <Wt>, <label>",  "opc": 0, "V": 0},
+    {"asm": "LDR <Xt>, <label>",  "opc": 1, "V": 0},
+    {"asm": "LDR <St>, <label>",  "opc": 0, "V": 1},
+    {"asm": "LDR <Dt>, <label>",  "opc": 1, "V": 1}
+  ]
+},
+
+{
+  "section": "C3.3.8",
+  "category": "Load/store register (Immediate post-indexed)",
+  "encoding": "size:2|111|V:1|00|opc:2|0|imm:9|01|Rn|Rt",
+  "TODO": ["Should represent imm as 'simm' signed CPP type"],
+  "instructions": [
+    {"asm": "STRB_post <Wt>, [<Xn>], #<imm>",  "size": 0, "V": 0, "opc": 0},
+    {"asm": "LDRB_post <Wt>, [<Xn>], #<imm>",  "size": 0, "V": 0, "opc": 1},
+    {"asm": "STR_post <Wt>, [<Xn>], #<imm>",  "size": 2, "V": 0, "opc": 0},
+    {"asm": "STR_post <Xt>, [<Xn>], #<imm>",  "size": 3, "V": 0, "opc": 0},
+    {"asm": "LDR_post <Wt>, [<Xn>], #<imm>",  "size": 2, "V": 0, "opc": 1},
+    {"asm": "LDR_post <Xt>, [<Xn>], #<imm>",  "size": 3, "V": 0, "opc": 1},
+    {"asm": "LDR_post <St>, [<Xn>], #<imm>",  "size": 2, "V": 1, "opc": 1},
+    {"asm": "LDR_post <Dt>, [<Xn>], #<imm>",  "size": 3, "V": 1, "opc": 1}
+  ]
+},
+
+{
+  "section": "C3.3.9",
+  "category": "Load/store register (Immediate pre-indexed)",
+  "encoding": "size:2|111|V:1|00|opc:2|0|imm:9|11|Rn|Rt",
+  "TODO": ["Should represent imm as 'simm' signed CPP type"],
+  "instructions": [
+    {"asm": "STRB_pre <Wt>, [<Xn>, #<imm>]!",  "size": 0, "V": 0, "opc": 0},
+    {"asm": "LDRB_pre <Wt>, [<Xn>, #<imm>]!",  "size": 0, "V": 0, "opc": 1},
+    {"asm": "STR_pre <Wt>, [<Xn>, #<imm>]!",  "size": 2, "V": 0, "opc": 0},
+    {"asm": "STR_pre <Xt>, [<Xn>, #<imm>]!",  "size": 3, "V": 0, "opc": 0},
+    {"asm": "STR_pre <St>, [<Xn>, #<imm>]!",  "size": 2, "V": 1, "opc": 0},
+    {"asm": "STR_pre <Dt>, [<Xn>, #<imm>]!",  "size": 3, "V": 1, "opc": 0},
+    {"asm": "LDR_pre <Wt>, [<Xn>, #<imm>]!",  "size": 2, "V": 0, "opc": 1},
+    {"asm": "LDR_pre <Xt>, [<Xn>, #<imm>]!",  "size": 3, "V": 0, "opc": 1}
+  ]
+},
+
+{
+  "section": "C3.3.10",
+  "category": "Load/store register (register offset)",
+  "encoding": "size:2|111|V:1|00|opc:2|1|Rm|option:3|S:1|10|Rn|Rt",
+  "TODO": ["Should represent imm as 'simm' signed CPP type"],
+  "instructions": [
+    {"asm": "STRB <Wt>, [<Xn>, <Wm>]", "size":0, "V": 0, "opc": 0, "option": 2, "S": 0},
+    {"asm": "STRH <Wt>, [<Xn>, <Wm>]", "size":1, "V": 0, "opc": 0, "option": 2, "S": 0},
+    {"asm": "STR <Wt>, [<Xn>, <Wm>]",  "size":2, "V": 0, "opc": 0, "option": 2, "S": 0},
+    {"asm": "STR <Xt>, [<Xn>, <Xm>]",  "size":3, "V": 0, "opc": 0, "option": 3, "S": 0},
+
+    {"asm": "LDRB <Wt>, [<Xn>, <Wm>]", "size":0, "V": 0, "opc": 1, "option": 2, "S": 0},
+    {"asm": "LDRH <Wt>, [<Xn>, <Wm>]", "size":1, "V": 0, "opc": 1, "option": 2, "S": 0},
+    {"asm": "LDR <Wt>, [<Xn>, <Wm>]",  "size":2, "V": 0, "opc": 1, "option": 2, "S": 0},
+    {"asm": "LDR <Xt>, [<Xn>, <Xm>]",  "size":3, "V": 0, "opc": 1, "option": 3, "S": 0}
+  ]
+},
+
+{
+  "section": "C3.3.14",
+  "category": "Load/Store Register Pair",
+  "encoding": "opc:2|101|V:1|010|L:1|imm2:7|Rt2|Rn|Rt1",
+  "instructions": [
+    { "asm": "STP <Wt1>, <Wt2>, [<Xn>, #<imm>]", "opc": 0, "V": 0, "L": 0, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "STP <Xt1>, <Xt2>, [<Xn>, #<imm>]", "opc": 2, "V": 0, "L": 0, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "STP <St1>, <St2>, [<Xn>, #<imm>]", "opc": 0, "V": 1, "L": 0, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "STP <Dt1>, <Dt2>, [<Xn>, #<imm>]", "opc": 1, "V": 1, "L": 0, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "STP <Qt1>, <Qt2>, [<Xn>, #<imm>]", "opc": 2, "V": 1, "L": 0, "imm2": "Immediate imm2 { imm.value / 16 };" },
+    
+    { "asm": "LDP <Wt1>, <Wt2>, [<Xn>, #<imm>]", "opc": 0, "V": 0, "L": 1, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "LDP <Xt1>, <Xt2>, [<Xn>, #<imm>]", "opc": 2, "V": 0, "L": 1, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "LDP <St1>, <St2>, [<Xn>, #<imm>]", "opc": 0, "V": 1, "L": 1, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "LDP <Dt1>, <Dt2>, [<Xn>, #<imm>]", "opc": 1, "V": 1, "L": 1, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "LDP <Qt1>, <Qt2>, [<Xn>, #<imm>]", "opc": 2, "V": 1, "L": 1, "imm2": "Immediate imm2 { imm.value / 16 };" }
+  ]
+},
+
+{
+  "section": "C3.3.15",
+  "category": "Load/Store Register Pair (post-indexed)",
+  "encoding": "opc:2|101|V:1|001|L:1|imm2:7|Rt2|Rn|Rt1",
+  "instructions": [
+    { "asm": "STP_post <Wt1>, <Wt2>, [<Xn>], #<imm>", "opc": 0, "V": 0, "L": 0, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "STP_post <Xt1>, <Xt2>, [<Xn>], #<imm>", "opc": 2, "V": 0, "L": 0, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "STP_post <St1>, <St2>, [<Xn>], #<imm>", "opc": 0, "V": 1, "L": 0, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "STP_post <Dt1>, <Dt2>, [<Xn>], #<imm>", "opc": 1, "V": 1, "L": 0, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "STP_post <Qt1>, <Qt2>, [<Xn>], #<imm>", "opc": 2, "V": 1, "L": 0, "imm2": "Immediate imm2 { imm.value / 16 };" },
+    
+    { "asm": "LDP_post <Wt1>, <Wt2>, [<Xn>], #<imm>", "opc": 0, "V": 0, "L": 1, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "LDP_post <Xt1>, <Xt2>, [<Xn>], #<imm>", "opc": 2, "V": 0, "L": 1, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "LDP_post <St1>, <St2>, [<Xn>], #<imm>", "opc": 0, "V": 1, "L": 1, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "LDP_post <Dt1>, <Dt2>, [<Xn>], #<imm>", "opc": 1, "V": 1, "L": 1, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "LDP_post <Qt1>, <Qt2>, [<Xn>], #<imm>", "opc": 2, "V": 1, "L": 1, "imm2": "Immediate imm2 { imm.value / 16 };" }
+  ]
+},
+
+{
+  "section": "C3.3.16",
+  "category": "Load/Store Register Pair (pre-indexed)",
+  "encoding": "opc:2|101|V:1|011|L:1|imm2:7|Rt2|Rn|Rt1",
+  "instructions": [
+    { "asm": "STP_pre <Wt1>, <Wt2>, [<Xn>, #<imm>]!", "opc": 0, "V": 0, "L": 0, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "STP_pre <Xt1>, <Xt2>, [<Xn>, #<imm>]!", "opc": 2, "V": 0, "L": 0, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "STP_pre <St1>, <St2>, [<Xn>, #<imm>]!", "opc": 0, "V": 1, "L": 0, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "STP_pre <Dt1>, <Dt2>, [<Xn>, #<imm>]!", "opc": 1, "V": 1, "L": 0, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "STP_pre <Qt1>, <Qt2>, [<Xn>, #<imm>]!", "opc": 2, "V": 1, "L": 0, "imm2": "Immediate imm2 { imm.value / 16 };" },
+
+    { "asm": "LDP_pre <Wt1>, <Wt2>, [<Xn>, #<imm>]!", "opc": 0, "V": 0, "L": 1, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "LDP_pre <Xt1>, <Xt2>, [<Xn>, #<imm>]!", "opc": 2, "V": 0, "L": 1, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "LDP_pre <St1>, <St2>, [<Xn>, #<imm>]!", "opc": 0, "V": 1, "L": 1, "imm2": "Immediate imm2 { imm.value / 4 };" },
+    { "asm": "LDP_pre <Dt1>, <Dt2>, [<Xn>, #<imm>]!", "opc": 1, "V": 1, "L": 1, "imm2": "Immediate imm2 { imm.value / 8 };" },
+    { "asm": "LDP_pre <Qt1>, <Qt2>, [<Xn>, #<imm>]!", "opc": 2, "V": 1, "L": 1, "imm2": "Immediate imm2 { imm.value / 16 };" }
+  ]
+},
+
+{
+  "section": "C3.4.1",
+  "category": "Add/Subtract (Immediate)",
+  "encoding": "sf:1|op:1|S:1|10001|00|imm:12|Rn|Rd",
+  "instructions": [
+    {"asm": "ADD <Wd>, <Wn>, #<imm>",  "sf": 0, "op": 0, "S": 0},
+    {"asm": "ADDS <Wd>, <Wn>, #<imm>", "sf": 0, "op": 0, "S": 1},
+    {"asm": "ADD <Xd>, <Xn>, #<imm>",  "sf": 1, "op": 0, "S": 0},
+    {"asm": "ADDS <Xd>, <Xn>, #<imm>", "sf": 1, "op": 0, "S": 1},
+    {"asm": "SUB <Wd>, <Wn>, #<imm>",  "sf": 0, "op": 1, "S": 0},
+    {"asm": "SUBS <Wd>, <Wn>, #<imm>", "sf": 0, "op": 1, "S": 1},
+    {"asm": "SUB <Xd>, <Xn>, #<imm>",  "sf": 1, "op": 1, "S": 0},
+    {"asm": "SUBS <Xd>, <Xn>, #<imm>", "sf": 1, "op": 1, "S": 1}
+  ]
+},
+
+{
+  "section": "C3.4.2",
+  "category": "Bitfield",
+  "encoding": "sf:1|opc:2|100110|N:1|immr:6|imms:6|Rn|Rd",
+  "instructions": [
+    {"asm": "SBFM <Wd>, <Wn>, #<immr>, #<imms>", "sf": 0, "opc": 0, "N": 0},
+    {"asm": "SBFM <Xd>, <Xn>, #<immr>, #<imms>", "sf": 1, "opc": 0, "N": 1},
+    {"asm": "BFM <Wd>, <Wn>, #<immr>, #<imms>",  "sf": 0, "opc": 1, "N": 0},
+    {"asm": "BFM <Xd>, <Xn>, #<immr>, #<imms>",  "sf": 1, "opc": 1, "N": 1},
+    {"asm": "UBFM <Wd>, <Wn>, #<immr>, #<imms>", "sf": 0, "opc": 2, "N": 0},
+    {"asm": "UBFM <Xd>, <Xn>, #<immr>, #<imms>", "sf": 1, "opc": 2, "N": 1}
+  ]
+},
+
+{
+  "section": "C3.4.4",
+  "category": "Logical (immediate)",
+  "encoding": "sf:1|opc:2|100100|N:1|immr:6|imms:6|Rn|Rd",
+  "mappings": {
+    "immediate_mapping_0": "const auto enc = logical_immediates.get_imm32(imm.value);",
+    "immediate_mapping_1": "const Immediate N = enc.N;",
+    "immediate_mapping_2": "const Immediate immr = enc.immr;",
+    "immediate_mapping_3": "const Immediate imms = enc.imms;"
+  },
+  "instructions": [
+    {"asm": "AND <Wd>, <Wn>, #<imm>",   "sf": 0, "opc": 0},
+    {"asm": "ORR <Wd>, <Wn>, #<imm>",   "sf": 0, "opc": 1},
+    {"asm": "EOR <Wd>, <Wn>, #<imm>",   "sf": 0, "opc": 2},
+    {"asm": "ANDS <Wd>, <Wn>, #<imm>",  "sf": 0, "opc": 3},
+    {"asm": "AND <Xd>, <Xn>, #<imm>",   "sf": 1, "opc": 0},
+    {"asm": "ORR <Xd>, <Xn>, #<imm>",   "sf": 1, "opc": 1},
+    {"asm": "EOR <Xd>, <Xn>, #<imm>",   "sf": 1, "opc": 2},
+    {"asm": "ANDS <Xd>, <Xn>, #<imm>",  "sf": 1, "opc": 3}
+  ]
+},
+
+{
+  "section": "C3.4.5",
+  "category": "Move wide (immediate)",
+  "encoding": "sf:1|opc:2|100101|hw:2|imm:16|Rd",
+  "TODO": ["Assert 32bit, hw<1> == 0"],
+  "instructions": [
+    {"asm": "MOVN <Wd>, #<imm>, LSL #<amount>", "sf": 0, "opc": 0, "hw": "Immediate hw { (amount.value >> 4) & 0b11 };"},
+    {"asm": "MOVN <Xd>, #<imm>, LSL #<amount>", "sf": 1, "opc": 0, "hw": "Immediate hw { (amount.value >> 4) & 0b11 };"},
+    {"asm": "MOVZ <Wd>, #<imm>, LSL #<amount>", "sf": 0, "opc": 2, "hw": "Immediate hw { (amount.value >> 4) & 0b11 };"},
+    {"asm": "MOVZ <Xd>, #<imm>, LSL #<amount>", "sf": 1, "opc": 2, "hw": "Immediate hw { (amount.value >> 4) & 0b11 };"},
+    {"asm": "MOVK <Wd>, #<imm>, LSL #<amount>", "sf": 0, "opc": 3, "hw": "Immediate hw { (amount.value >> 4) & 0b11 };"},
+    {"asm": "MOVK <Xd>, #<imm>, LSL #<amount>", "sf": 1, "opc": 3, "hw": "Immediate hw { (amount.value >> 4) & 0b11 };"},
+    {"asm": "MOV <Wd>, #<imm>", "sf": 0, "opc": 2, "hw": 0},
+    {"asm": "MOV <Xd>, #<imm>", "sf": 1, "opc": 2, "hw": 0}
+  ]
+},
+
+{
+  "section": "C3.5.1",
+  "category": "Add/subtract (extended register)",
+  "encoding": "sf:1|op:1|S:1|01011|opt:2|1|Rm|extend:3|amount:3|Rn|Rd",
+  "instructions": [
+    {"asm": "ADD <Wd>, <Wn>, <Wm>{, <extend> <amount>}",  "sf": 0, "op": 0, "S": 0, "opt": 0},
+    {"asm": "ADD <Xd>, <Xn>, <Xm>{, <extend> <amount>}",  "sf": 1, "op": 0, "S": 0, "opt": 0}
+  ]
+},
+
+{
+  "section": "C3.5.2",
+  "category": "Add/subtract (shifted register)",
+  "encoding": "sf:1|op:1|S:1|01011|shift:2|0|Rm|imm:6|Rn|Rd",
+  "defaults": {
+    "shift": "RegisterShift::LSL",
+    "imm": "0"
+  },
+  "instructions": [
+    {"asm": "ADD <Wd>, <Wn>, <Wm>{, <shift> <imm>}",  "sf": 0, "op": 0, "S": 0},
+    {"asm": "ADDS <Wd>, <Wn>, <Wm>{, <shift> <imm>}", "sf": 0, "op": 0, "S": 1},
+    {"asm": "SUB <Wd>, <Wn>, <Wm>{, <shift> <imm>}",  "sf": 0, "op": 1, "S": 0},
+    {"asm": "SUBS <Wd>, <Wn>, <Wm>{, <shift> <imm>}", "sf": 0, "op": 1, "S": 1},
+    {"asm": "ADD <Xd>, <Xn>, <Xm>{, <shift> <imm>}",  "sf": 1, "op": 0, "S": 0},
+    {"asm": "ADDS <Xd>, <Xn>, <Xm>{, <shift> <imm>}", "sf": 1, "op": 0, "S": 1},
+    {"asm": "SUB <Xd>, <Xn>, <Xm>{, <shift> <imm>}",  "sf": 1, "op": 1, "S": 0},
+    {"asm": "SUBS <Xd>, <Xn>, <Xm>{, <shift> <imm>}", "sf": 1, "op": 1, "S": 1}
+  ]
+},
+
+{
+  "section": "C3.5.6",
+  "category": "Conditional Select",
+  "encoding": "sf:1|op:1|S:1|11010100|Rm|cond2:4|op2:2|Rn|Rd",
+  "instructions": [
+    {"asm": "CSEL <Wd>, <Wn>, <Wm>, <cond>",   "sf": 0, "op": 0, "S": 0, "op2": 0, "cond2": "Immediate cond2 = cond;"},
+    {"asm": "CSINC <Wd>, <Wn>, <Wm>, <cond>",  "sf": 0, "op": 0, "S": 0, "op2": 1, "cond2": "Immediate cond2 { ((u32)cond & 0b1111) ^ 1 };"},
+    {"asm": "CSINV <Wd>, <Wn>, <Wm>, <cond>",  "sf": 0, "op": 1, "S": 0, "op2": 0, "cond2": "Immediate cond2 { ((u32)cond & 0b1111) ^ 1 };"},
+    {"asm": "CSNEG <Wd>, <Wn>, <Wm>, <cond>",  "sf": 0, "op": 1, "S": 0, "op2": 1, "cond2": "Immediate cond2 { ((u32)cond & 0b1111) ^ 1 };"},
+    {"asm": "CSEL <Xd>, <Xn>, <Xm>, <cond>",   "sf": 1, "op": 0, "S": 0, "op2": 0, "cond2": "Immediate cond2 = cond;"},
+    {"asm": "CSINC <Xd>, <Xn>, <Xm>, <cond>",  "sf": 1, "op": 0, "S": 0, "op2": 1, "cond2": "Immediate cond2 { ((u32)cond & 0b1111) ^ 1 };"},
+    {"asm": "CSINV <Xd>, <Xn>, <Xm>, <cond>",  "sf": 1, "op": 1, "S": 0, "op2": 0, "cond2": "Immediate cond2 { ((u32)cond & 0b1111) ^ 1 };"},
+    {"asm": "CSNEG <Xd>, <Xn>, <Xm>, <cond>",  "sf": 1, "op": 1, "S": 0, "op2": 1, "cond2": "Immediate cond2 { ((u32)cond & 0b1111) ^ 1 };"}
+  ]
+},
+
+{
+  "section": "C3.5.7",
+  "category": "Data-processing (1 source)",
+  "encoding": "sf:1|1|S:1|11010110|opcode2:5|opcode:6|Rn|Rd",
+  "instructions": [
+    {"asm": "RBIT <Wd>, <Wn>",  "sf": 0, "S": 0, "opcode2": 0, "opcode": 0},
+    {"asm": "REV16 <Wd>, <Wn>", "sf": 0, "S": 0, "opcode2": 0, "opcode": 1},
+    {"asm": "REV <Wd>, <Wn>",   "sf": 0, "S": 0, "opcode2": 0, "opcode": 2},
+    {"asm": "CLZ <Wd>, <Wn>",   "sf": 0, "S": 0, "opcode2": 0, "opcode": 4},
+    {"asm": "CLS <Wd>, <Wn>",   "sf": 0, "S": 0, "opcode2": 0, "opcode": 5},
+
+    {"asm": "RBIT <Xd>, <Xn>",  "sf": 1, "S": 0, "opcode2": 0, "opcode": 0},
+    {"asm": "REV16 <Xd>, <Xn>", "sf": 1, "S": 0, "opcode2": 0, "opcode": 1},
+    {"asm": "REV32 <Xd>, <Xn>", "sf": 1, "S": 0, "opcode2": 0, "opcode": 2},
+    {"asm": "REV <Xd>, <Xn>",   "sf": 1, "S": 0, "opcode2": 0, "opcode": 3},
+    {"asm": "CLZ <Xd>, <Xn>",   "sf": 1, "S": 0, "opcode2": 0, "opcode": 4},
+    {"asm": "CLS <Xd>, <Xn>",   "sf": 1, "S": 0, "opcode2": 0, "opcode": 5}
+  ]
+},
+
+{
+  "section": "C3.5.8",
+  "category": "Data-processing (2 source)",
+  "encoding": "sf:1|0|S:1|11010110|Rm|opcode:6|Rn|Rd",
+  "instructions": [
+    {"asm": "UDIV <Wd>, <Wn>, <Wm>",  "sf": 0, "S": 0, "opcode": 2},
+    {"asm": "SDIV <Wd>, <Wn>, <Wm>",  "sf": 0, "S": 0, "opcode": 3},
+    {"asm": "LSLV <Wd>, <Wn>, <Wm>",  "sf": 0, "S": 0, "opcode": 8},
+    {"asm": "LSRV <Wd>, <Wn>, <Wm>",  "sf": 0, "S": 0, "opcode": 9},
+    {"asm": "ASRV <Wd>, <Wn>, <Wm>",  "sf": 0, "S": 0, "opcode": 10},
+    {"asm": "RORV <Wd>, <Wn>, <Wm>",  "sf": 0, "S": 0, "opcode": 11},
+
+    {"asm": "UDIV <Xd>, <Xn>, <Xm>",  "sf": 1, "S": 0, "opcode": 2},
+    {"asm": "SDIV <Xd>, <Xn>, <Xm>",  "sf": 1, "S": 0, "opcode": 3},
+    {"asm": "LSLV <Xd>, <Xn>, <Xm>",  "sf": 1, "S": 0, "opcode": 8},
+    {"asm": "LSRV <Xd>, <Xn>, <Xm>",  "sf": 1, "S": 0, "opcode": 9},
+    {"asm": "ASRV <Xd>, <Xn>, <Xm>",  "sf": 1, "S": 0, "opcode": 10},
+    {"asm": "RORV <Xd>, <Xn>, <Xm>",  "sf": 1, "S": 0, "opcode": 11}
+  ]
+},
+
+{
+  "section": "C3.5.9",
+  "category": "Data-processing (3 source)",
+  "encoding": "sf:1|op54:2|11011|op31:3|Rm|o0:1|Ra|Rn|Rd",
+  "instructions": [
+    {"asm": "MADD <Wd>, <Wn>, <Wm>, <Wa>",  "sf": 0, "op54": 0, "op31": 0, "o0": 0},
+    {"asm": "MSUB <Wd>, <Wn>, <Wm>, <Wa>",  "sf": 0, "op54": 0, "op31": 0, "o0": 1},
+    {"asm": "MADD <Xd>, <Xn>, <Xm>, <Xa>",  "sf": 1, "op54": 0, "op31": 0, "o0": 0},
+    {"asm": "MSUB <Xd>, <Xn>, <Xm>, <Xa>",  "sf": 1, "op54": 0, "op31": 0, "o0": 1},
+
+    {"asm": "SMADDL <Xd>, <Wn>, <Wm>, <Xa>", "sf": 1, "op54": 0, "op31": 1, "o0": 0},
+    {"asm": "SMSUBL <Xd>, <Wn>, <Wm>, <Xa>", "sf": 1, "op54": 0, "op31": 1, "o0": 1},
+    {"asm": "UMADDL <Xd>, <Wn>, <Wm>, <Xa>", "sf": 1, "op54": 0, "op31": 5, "o0": 0},
+    {"asm": "UMSUBL <Xd>, <Wn>, <Wm>, <Xa>", "sf": 1, "op54": 0, "op31": 5, "o0": 1}
+  ]
+},
+
+{
+  "section": "C3.5.9",
+  "category": "Data-processing (3 source, but not really??)",
+  "encoding": "sf:1|op54:2|11011|op31:3|Rm|o0:1|11111|Rn|Rd",
+  "instructions": [
+    {"asm": "SMULH <Xd>, <Xn>, <Xm>", "sf": 1, "op54": 0, "op31": 2, "o0": 0},
+    {"asm": "UMULH <Xd>, <Xn>, <Xm>", "sf": 1, "op54": 0, "op31": 6, "o0": 0}
+  ]
+},
+
+{
+  "section": "C3.5.10",
+  "category": "Logical (shifted register)",
+  "encoding": "sf:1|opc:2|01010|shift_todo:2|N:1|Rm|imm:6|Rn|Rd",
+  "TODO": ["Implement shift"],
+  "instructions": [
+    {"asm": "AND <Wd>, <Wn>, <Wm>",  "sf": 0, "opc": 0, "N": 0, "shift_todo": 0, "imm": 0},
+    {"asm": "BIC <Wd>, <Wn>, <Wm>",  "sf": 0, "opc": 0, "N": 1, "shift_todo": 0, "imm": 0},
+    {"asm": "ORR <Wd>, <Wn>, <Wm>",  "sf": 0, "opc": 1, "N": 0, "shift_todo": 0, "imm": 0},
+    {"asm": "ORN <Wd>, <Wn>, <Wm>",  "sf": 0, "opc": 1, "N": 1, "shift_todo": 0, "imm": 0},
+    {"asm": "EOR <Wd>, <Wn>, <Wm>",  "sf": 0, "opc": 2, "N": 0, "shift_todo": 0, "imm": 0},
+    {"asm": "EON <Wd>, <Wn>, <Wm>",  "sf": 0, "opc": 2, "N": 1, "shift_todo": 0, "imm": 0},
+    {"asm": "ANDS <Wd>, <Wn>, <Wm>", "sf": 0, "opc": 3, "N": 0, "shift_todo": 0, "imm": 0},
+    {"asm": "BICS <Wd>, <Wn>, <Wm>", "sf": 0, "opc": 3, "N": 1, "shift_todo": 0, "imm": 0},
+    {"asm": "AND <Xd>, <Xn>, <Xm>",  "sf": 1, "opc": 0, "N": 0, "shift_todo": 0, "imm": 0},
+    {"asm": "BIC <Xd>, <Xn>, <Xm>",  "sf": 1, "opc": 0, "N": 1, "shift_todo": 0, "imm": 0},
+    {"asm": "ORR <Xd>, <Xn>, <Xm>",  "sf": 1, "opc": 1, "N": 0, "shift_todo": 0, "imm": 0},
+    {"asm": "ORN <Xd>, <Xn>, <Xm>",  "sf": 1, "opc": 1, "N": 1, "shift_todo": 0, "imm": 0},
+    {"asm": "EOR <Xd>, <Xn>, <Xm>",  "sf": 1, "opc": 2, "N": 0, "shift_todo": 0, "imm": 0},
+    {"asm": "EON <Xd>, <Xn>, <Xm>",  "sf": 1, "opc": 2, "N": 1, "shift_todo": 0, "imm": 0},
+    {"asm": "ANDS <Xd>, <Xn>, <Xm>", "sf": 1, "opc": 3, "N": 0, "shift_todo": 0, "imm": 0},
+    {"asm": "BICS <Xd>, <Xn>, <Xm>", "sf": 1, "opc": 3, "N": 1, "shift_todo": 0, "imm": 0}
+  ]
+},
+
+{
+  "section": "???",
+  "category": "fmov",
+  "encoding": "sf:1|0|0|11110|type:2|1|rmode:2|opcode:3|000000|Rn|Rd",
+  "instructions": [
+    {"asm": "FMOV <Sd>, <Wn>", "sf": 0, "type": 0, "rmode": 0, "opcode": 7},
+    {"asm": "FMOV <Wd>, <Sn>", "sf": 0, "type": 0, "rmode": 0, "opcode": 6},
+    {"asm": "FMOV <Dd>, <Xn>", "sf": 1, "type": 1, "rmode": 0, "opcode": 7},
+    {"asm": "FMOV <Xd>, <Dn>", "sf": 1, "type": 1, "rmode": 0, "opcode": 6}
+  ]
+},
+
+{
+  "section": "???",
+  "category": "Float arithmetic",
+  "encoding": "0|0|0|11110|type:2|1|Rm|001|op:1|10|Rn|Rd",
+  "instructions": [
+    {"asm": "FADD <Sd>, <Sn>, <Sm>", "type": 0, "op": 0},
+    {"asm": "FADD <Dd>, <Dn>, <Dm>", "type": 1, "op": 0},
+    {"asm": "FSUB <Sd>, <Sn>, <Sm>", "type": 0, "op": 1},
+    {"asm": "FSUB <Dd>, <Dn>, <Dm>", "type": 1, "op": 1}
+  ]
+},
+
+{
+  "section": "???",
+  "category": "Float mul",
+  "encoding": "0|0|0|11110|type:2|1|Rm|op:1|000|10|Rn|Rd",
+  "instructions": [
+    {"asm": "FMUL <Sd>, <Sn>, <Sm>", "type": 0, "op": 0},
+    {"asm": "FMUL <Dd>, <Dn>, <Dm>", "type": 1, "op": 0}
+  ]
+},
+
+{
+  "section": "???",
+  "category": "Float div",
+  "encoding": "0|0|0|11110|type:2|1|Rm|0001|10|Rn|Rd",
+  "instructions": [
+    {"asm": "FDIV <Sd>, <Sn>, <Sm>", "type": 0},
+    {"asm": "FDIV <Dd>, <Dn>, <Dm>", "type": 1}
+  ]
+},
+
+{
+  "section": "???",
+  "category": "Float sqrt",
+  "encoding": "m:1|0|s:1|11110|type:2|1|opcode:6|10000|Rn|Rd",
+  "instructions": [
+    {"asm": "FSQRT <Sd>, <Sn>", "m": 0, "s": 0, "type": 0, "opcode": 3},
+    {"asm": "FSQRT <Dd>, <Dn>", "m": 0, "s": 0, "type": 1, "opcode": 3}
+  ]
+}
+
+  ]
+}

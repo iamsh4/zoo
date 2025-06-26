@@ -1,0 +1,38 @@
+﻿BasedOnStyle: Mozilla
+AlignOperands: true
+AllowShortBlocksOnASingleLine: false
+ColumnLimit: 90
+NamespaceIndentation: None
+SortIncludes: false
+SpaceBeforeCpp11BracedList: true
+SpaceBeforeParens: ControlStatements
+Standard: Auto
+TabWidth: 2
+UseTab: Never
+BreakInheritanceList: AfterColon
+BreakConstructorInitializers: BeforeColon
+ConstructorInitializerAllOnOneLineOrOnePerLine: true
+AllowAllConstructorInitializersOnNextLine: false
+AllowShortEnumsOnASingleLine: false
+AllowShortFunctionsOnASingleLine: Empty
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLambdasOnASingleLine: Inline
+AlwaysBreakAfterDefinitionReturnType: TopLevel
+AlwaysBreakAfterReturnType: TopLevelDefinitions
+AlwaysBreakTemplateDeclarations: Yes
+DerivePointerAlignment: false
+PointerAlignment: Right
+BreakBeforeBraces: Custom
+BraceWrapping:
+  AfterEnum: false
+  AfterStruct: false
+  AfterUnion: false
+  AfterControlStatement: false
+  AfterFunction: true
+  AfterNamespace: false
+  BeforeCatch: false
+  BeforeElse: false
+  BeforeLambdaBody: false
+  BeforeWhile: false
+MaxEmptyLinesToKeep: 1
+AlignConsecutiveAssignments: false

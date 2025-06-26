@@ -1,0 +1,1036 @@
+#if 0
+// vim: expandtab:ts=2:sw=2
+
+#include <csignal>
+#include <iostream>
+#include <cstdio>
+#include <list>
+#include <set>
+#include <unordered_map>
+#include <optional>
+#include <string>
+
+#ifdef __APPLE__
+#include <mach/task.h>
+#include <mach/mach_init.h>
+#include <mach/mach_port.h>
+#endif
+
+#ifdef __linux__
+#include <sys/prctl.h>
+#endif
+
+#include <fmt/core.h>
+#include <GL/glew.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengl.h>
+
+#include <imgui.h>
+#include <imgui/backends/imgui_impl_sdl.h>
+#include <imgui/backends/imgui_impl_opengl3.h>
+
+#include "shared/log.h"
+#include "shared/ansi_color_constants.h"
+#include "shared/parsing.h"
+#include "shared/stopwatch.h"
+#include "shared/argument_parser.h"
+#include "shared/profiling.h"
+
+#include "core/console.h"
+#include "core/memtable.h"
+#include "cpu/debug.h"
+#include "cpu/sh4.h"
+
+#include "apu/audio_dummy.h"
+
+#include "peripherals/modem.h"
+#include "peripherals/controller.h"
+#include "peripherals/keyboard.h"
+#include "peripherals/vmu.h"
+
+#include "gpu/texture_manager.h"
+#include "gpu/renderer.h"
+#include "gpu/opengl3_renderer.h"
+#include "gpu/holly.h"
+
+#include "gui/window_cpu.h"
+#include "gui/window_jit.h"
+#include "gui/window_jit_workbench.h"
+#include "gui/window_logger.h"
+#include "gui/window_graphics.h"
+#include "gui/window_memeditor.h"
+#include "gui/graph.h"
+
+using namespace std::chrono_literals;
+
+std::atomic<bool> is_exiting(false);
+std::atomic<uint64_t> emulation_continue(UINT64_MAX);
+
+bool
+regs_equal(const cpu::SH4::Registers &regs1,
+           const cpu::SH4::Registers &regs2,
+           const cpu::SH4::FPUState &fpu_regs1,
+           const cpu::SH4::FPUState &fpu_regs2,
+           std::vector<std::string> &diff)
+{
+  const bool regs_match = memcmp(&regs1, &regs2, sizeof(regs1)) == 0;
+  const bool fpu_regs_match = memcmp(&fpu_regs1, &fpu_regs2, sizeof(fpu_regs1)) == 0;
+  if (regs_match && fpu_regs_match) {
+    return true;
+  }
+
+  /* GPRs */
+  for (unsigned i = 0; i < 8 * 3; ++i)
+    if (regs1.general_registers[i] != regs2.general_registers[i]) {
+      diff.push_back(fmt::format("{:<8} : 0x{:<08x} - 0x{:<08x}",
+                                 fmt::format("r{}", i),
+                                 regs1.general_registers[i],
+                                 regs2.general_registers[i]));
+    }
+
+  /* FPU */
+  for (unsigned bank = 0; bank < 2; ++bank) {
+    /* Single precision aliases */
+    for (int sp = 0; sp < 16; ++sp) {
+      if (fpu_regs1.banks[bank].sp[sp] != fpu_regs2.banks[bank].sp[sp]) {
+        diff.push_back(fmt::format("{:<8} : {:<8} - {:<8}",
+                                   fmt::format("B{}:SP{}", bank, sp),
+                                   fpu_regs1.banks[bank].sp[sp],
+                                   fpu_regs2.banks[bank].sp[sp]));
+      }
+    }
+
+    /* Double precision aliases */
+    for (unsigned dp = 0; dp < 8; ++dp) {
+      if (fpu_regs1.banks[bank].dp[dp] != fpu_regs2.banks[bank].dp[dp]) {
+        diff.push_back(fmt::format("{:<8} : {:<8} - {:<8}",
+                                   fmt::format("B{}:DP{}", bank, dp),
+                                   fpu_regs1.banks[bank].dp[dp],
+                                   fpu_regs2.banks[bank].dp[dp]));
+      }
+    }
+  }
+
+  if (regs1.SR.raw != regs2.SR.raw) {
+    diff.push_back(
+      fmt::format("{:<8} : 0x{:<08x} - 0x{:<08x}", "SR", regs1.SR.raw, regs2.SR.raw));
+  }
+
+  if (regs1.SSR.raw != regs2.SSR.raw) {
+    diff.push_back(
+      fmt::format("{:<8} : 0x{:<08x} - 0x{:<08x}", "SR", regs1.SSR.raw, regs2.SSR.raw));
+  }
+
+  if (fpu_regs1.FPSCR.raw != fpu_regs2.FPSCR.raw) {
+    diff.push_back(fmt::format("{:<8} : 0x{:<08x} - 0x{:<08x}",
+                               "FPSCR",
+                               fpu_regs1.FPSCR.raw,
+                               fpu_regs2.FPSCR.raw));
+  }
+
+#define DIFF_CHECK(reg_name)                                                             \
+  if (regs1.reg_name != regs2.reg_name)                                                  \
+    diff.push_back(fmt::format(                                                          \
+      "{:<8} : 0x{:<08x} - 0x{:<08x}", #reg_name, regs1.reg_name, regs2.reg_name));
+
+  DIFF_CHECK(DBR)
+  DIFF_CHECK(GBR)
+  DIFF_CHECK(MAC)
+  DIFF_CHECK(MACH)
+  DIFF_CHECK(MACL)
+  DIFF_CHECK(GBR)
+  DIFF_CHECK(GBR)
+  DIFF_CHECK(GBR)
+  DIFF_CHECK(PC)
+  DIFF_CHECK(PR)
+  DIFF_CHECK(SGR)
+  DIFF_CHECK(SPC)
+  DIFF_CHECK(SPR)
+  DIFF_CHECK(VBR)
+
+#undef DIFF_CHECK
+
+  return false;
+}
+
+void
+emulation_thread_entry(Console *const console1, Console *const console2)
+{
+  ProfileSetThreadName("Emulation Thread");
+
+#ifdef __linux__
+  prctl(PR_SET_NAME, "penguin:emulation", 0, 0, 0);
+#endif
+
+  const std::chrono::milliseconds milliseconds_per_execution(5);
+  uint64_t step_count = emulation_continue.load();
+  while (true) {
+    bool halt = false;
+
+    if (is_exiting.load()) {
+      return;
+    }
+
+    /* SH4 CPU emulation. */
+
+    if (step_count == UINT64_MAX) {
+      /* If last "continue" was indefinite */
+      try {
+        Stopwatch cpu_timer;
+
+        const u32 start_pc1 = console1->cpu()->registers().PC;
+        const u32 start_pc2 = console2->cpu()->registers().PC;
+
+        console1->cpu()->set_execution_mode(cpu::SH4::ExecutionMode::Native);
+        console1->debug_run_single_block();
+
+        /* XXX Command line parameter? */
+        if (false) {
+          console2->cpu()->set_execution_mode(cpu::SH4::ExecutionMode::Interpreter);
+          console2->debug_step_single_block(console1->cycles_since_reset());
+        } else {
+          console2->cpu()->set_execution_mode(cpu::SH4::ExecutionMode::Bytecode);
+          console2->debug_run_single_block();
+        }
+
+        /* Compare! */
+        std::vector<std::string> diff;
+        auto regs1 = console1->cpu()->registers();
+        auto fpu_regs1 = console1->cpu()->fpu_registers();
+        auto regs2 = console2->cpu()->registers();
+        auto fpu_regs2 = console2->cpu()->fpu_registers();
+        if (!regs_equal(regs1, regs2, fpu_regs1, fpu_regs2, diff)) {
+          fmt::print(
+            "Difference at console1 nanos={}, console2 nanos={}, StartPC1 0x{:08x}, "
+            "StartPC2 0x{:08x}\n",
+            console1->cycles_since_reset(),
+            console2->cycles_since_reset(),
+            start_pc1,
+            start_pc2);
+
+          for (auto &e : diff) {
+            fmt::print("{}\n", e);
+          }
+          halt = true;
+        } else if (console1->cycles_since_reset() != console2->cycles_since_reset()) {
+          fmt::print("Console regs match, but cycle counts do not. console1 {}, console2 "
+                     "{}, PC1 0x{:08x}, PC2 0x{:08x}\n",
+                     console1->cycles_since_reset(),
+                     console2->cycles_since_reset(),
+                     start_pc1,
+                     start_pc2);
+          halt = true;
+        } else {
+          // fmt::print(" -- No Diff console1 {}, console2 {}\n",
+          //            console1->cycles_since_reset(),
+          //            console2->cycles_since_reset());
+        }
+      }
+
+      catch (cpu::SH4::BreakpointException &) {
+        printf("Emulator halted: SH4: Breakpoint\n");
+        halt = true;
+      }
+
+      catch (std::out_of_range &e) {
+        printf("Emulator halted: SH4: %s\n", e.what());
+        halt = true;
+      }
+
+      catch (std::runtime_error &e) {
+        printf("Emulator halted: SH4: %s\n", e.what());
+        halt = true;
+      }
+
+      /* AICA emulation */
+
+      if (console1->memory()->read<u32>(0x00800000u) != 0x00000000) {
+        try {
+          console1->aica()->step_block();
+          console2->aica()->step_block();
+        }
+
+        catch (std::out_of_range &e) {
+          printf("Emulator halted: AICA: %s\n", e.what());
+          halt = true;
+        }
+
+        catch (std::runtime_error &e) {
+          printf("Emulator halted: AICA: %s\n", e.what());
+          halt = true;
+        }
+      }
+
+      step_count = emulation_continue.load();
+    } else if (step_count > 0) {
+      /* Single-stepping a finite number of cycles */
+      try {
+        console1->debug_step();
+        console2->debug_step();
+      }
+
+      catch (cpu::SH4::BreakpointException &) {
+        halt = true;
+      }
+
+      --step_count;
+    } else {
+      /* Simulation paused */
+      std::this_thread::sleep_for(1ms);
+
+      step_count = emulation_continue.load();
+      if (step_count > 0 && step_count != UINT64_MAX) {
+        emulation_continue.store(0);
+      }
+    }
+
+    if (halt) {
+      step_count = 0;
+      emulation_continue.store(0);
+    }
+  }
+}
+
+struct InputDevice {
+  SDL_Joystick *joystick = nullptr;
+  SDL_GameController *controller = nullptr;
+
+  ~InputDevice()
+  {
+    if (joystick != nullptr) {
+      SDL_JoystickClose(joystick);
+      joystick = nullptr;
+    }
+
+    if (controller != nullptr) {
+      SDL_GameControllerClose(controller);
+      controller = nullptr;
+    }
+  }
+};
+
+/* Setup the main docking functionality. */
+gui::CPUWindow *cpu_debugger_window = nullptr;
+gui::JitWindow *jit_window = nullptr;
+gui::JitWorkbenchWindow *jit_workbench_window = nullptr;
+gui::LoggerWindow *logger_window = nullptr;
+gui::GraphicsWindow *graphics_debugging_window = nullptr;
+gui::MemoryEditor *memeditor_window = nullptr;
+
+void
+draw_vmu_window(const unsigned port, const maple::VMU *const vmu)
+{
+  const float screen_offset = 20.0f;
+  const float pixel_size = 3.0f;
+  const float render_width = maple::VMU::LCD_WIDTH * pixel_size;
+  const float render_height = maple::VMU::LCD_HEIGHT * pixel_size;
+
+  ImGuiViewport *const viewport = ImGui::GetMainViewport();
+  const ImVec2 viewport_size = viewport->GetWorkSize();
+  ImGui::SetNextWindowPos(
+    { /* XXX X == 0 seems to actually start a few pixels from the left... */
+      screen_offset +
+        (viewport_size.x - screen_offset * 3.0f - render_width) / 3.0f * port,
+      viewport_size.y - render_height - screen_offset });
+
+  char name[32];
+  snprintf(name, sizeof(name), "VMU%u", port);
+
+  const ImGuiWindowFlags window_flags =
+    ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoTitleBar |
+    ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove |
+    ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus |
+    ImGuiWindowFlags_NoBackground;
+  ImGui::Begin(name, nullptr, window_flags);
+
+  ImVec2 window_topleft = ImGui::GetCursorScreenPos();
+  {
+    auto *draw_list = ImGui::GetWindowDrawList();
+    for (unsigned y = 0; y < maple::VMU::LCD_HEIGHT; ++y) {
+      for (unsigned x = 0; x < maple::VMU::LCD_WIDTH; ++x) {
+        float lcd_level = vmu->lcd_pixels()[y * maple::VMU::LCD_WIDTH + x];
+        lcd_level = 0.25 + 0.5 * lcd_level;
+
+        const ImU32 im_color =
+          ImGui::GetColorU32(ImVec4(lcd_level, lcd_level, lcd_level, 0.7f));
+        const ImVec2 p2 =
+          ImVec2(window_topleft.x + x * pixel_size, window_topleft.y + y * pixel_size);
+        const ImVec2 p3 = ImVec2(p2.x + pixel_size, p2.y + pixel_size);
+        draw_list->AddRectFilled(p2, p3, im_color);
+      }
+    }
+
+    ImGui::InvisibleButton("",
+                           ImVec2(pixel_size * (maple::VMU::LCD_WIDTH - 1),
+                                  pixel_size * (maple::VMU::LCD_HEIGHT - 2)));
+  }
+
+  ImGui::End();
+}
+
+// Top menu and root dockspace for allowing dockable windows to dock to the window
+// itself.
+void
+draw_dock(std::shared_ptr<Console> &console)
+{
+  static bool vsync_limit = false;
+  static bool opt_fullscreen_persistant = true;
+  bool opt_fullscreen = opt_fullscreen_persistant;
+  static ImGuiDockNodeFlags dockspace_flags = ImGuiDockNodeFlags_PassthruCentralNode;
+
+  // We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not
+  // dockable into, because it would be confusing to have two docking targets within
+  // each others.
+  ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
+  if (opt_fullscreen) {
+    ImGuiViewport *viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->GetWorkPos());
+    ImGui::SetNextWindowSize(viewport->GetWorkSize());
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse |
+                    ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+    window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
+  }
+
+  // When using ImGuiDockNodeFlags_PassthruCentralNode, draw_dock() will render our
+  // background and handle the pass-thru hole, so we ask Begin() to not render a
+  // background.
+  if (dockspace_flags & ImGuiDockNodeFlags_PassthruCentralNode) {
+    window_flags |= ImGuiWindowFlags_NoBackground;
+  }
+
+  // Important: note that we proceed even if Begin() returns false (aka window is
+  // collapsed). This is because we want to keep our draw_dock() active. If a
+  // draw_dock() is inactive, all active windows docked into it will lose their parent
+  // and become undocked. We cannot preserve the docking relationship between an active
+  // window and an inactive docking, otherwise any change of dockspace/settings would
+  // lead to windows being stuck in limbo and never being visible.
+  ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+  static bool p_open = true;
+  ImGui::Begin("DockSpace", &p_open, window_flags);
+  ImGui::PopStyleVar();
+
+  if (opt_fullscreen) {
+    ImGui::PopStyleVar(2);
+  }
+
+  // DockSpace
+  ImGuiIO &io = ImGui::GetIO();
+  if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable) {
+    ImGuiID dockspace_id = ImGui::GetID("MyDockSpace");
+    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspace_flags);
+  }
+
+  if (ImGui::BeginMenuBar()) {
+    if (ImGui::BeginMenu("Windows")) {
+      // Disabling fullscreen would allow the window to be moved to the front of other
+      // windows, which we can't undo at the moment without finer window depth/z
+      // control.
+
+      if (ImGui::MenuItem("CPU Debugger", "", (cpu_debugger_window->is_visible()))) {
+        cpu_debugger_window->toggle_visible();
+      }
+
+      if (ImGui::MenuItem("Jit Info", "", (jit_window->is_visible()))) {
+        jit_window->toggle_visible();
+      }
+
+      if (ImGui::MenuItem("Jit Workbench", "", (jit_workbench_window->is_visible()))) {
+        jit_workbench_window->toggle_visible();
+      }
+
+      if (ImGui::MenuItem(
+            "Graphics Debugger", "", (graphics_debugging_window->is_visible()))) {
+        graphics_debugging_window->toggle_visible();
+      }
+
+      if (ImGui::MenuItem("Logger", "", (logger_window->is_visible()))) {
+        logger_window->toggle_visible();
+      }
+
+      if (ImGui::MenuItem("Memory Editor", "", (memeditor_window->is_visible()))) {
+        memeditor_window->toggle_visible();
+      }
+
+      ImGui::EndMenu();
+    }
+
+    if (ImGui::BeginMenu("Options")) {
+      if (ImGui::MenuItem("VSync Limit", "", vsync_limit)) {
+        vsync_limit = !vsync_limit;
+        // TODO : Turning this on creates an opportunity for inconsistency in the two
+        // consoles.
+        // console->gpu()->set_vsync_limiting(vsync_limit);
+      }
+
+      ImGui::EndMenu();
+    }
+
+    ImGui::Text("(F5 to toggle all debugging)");
+
+    ImGui::EndMenuBar();
+  }
+
+  ImGui::End();
+}
+
+enum Analog
+{
+  JoystickX,
+  JoystickY,
+  TriggerLeft,
+  TriggerRight,
+};
+
+struct InputMapping {
+  std::map<unsigned, maple::Controller::Button> digital;
+  std::map<unsigned, Analog> analog;
+};
+
+static const std::map<std::string, InputMapping> SupportedInputs = {
+  {
+    "HuiJia  USB GamePad",
+    InputMapping{
+      .digital = {
+        { 0,  maple::Controller::Button::A },
+        { 1,  maple::Controller::Button::B },
+        { 2,  maple::Controller::Button::X },
+        { 3,  maple::Controller::Button::Y },
+        { 9,  maple::Controller::Button::Start },
+        { 12, maple::Controller::Button::DpadUp },
+        { 14, maple::Controller::Button::DpadDown },
+        { 15, maple::Controller::Button::DpadLeft },
+        { 13, maple::Controller::Button::DpadRight },
+      },
+      .analog = {
+        { 0, JoystickX },
+        { 1, JoystickY },
+        { 2, TriggerLeft },
+        { 3, TriggerRight }
+      }
+    }
+  },
+};
+
+static const std::map<u8, maple::Controller::Button> sdl2_digital_to_penguin = {
+  { SDL_CONTROLLER_BUTTON_DPAD_UP, maple::Controller::Button::DpadUp },
+  { SDL_CONTROLLER_BUTTON_DPAD_RIGHT, maple::Controller::Button::DpadRight },
+  { SDL_CONTROLLER_BUTTON_DPAD_DOWN, maple::Controller::Button::DpadDown },
+  { SDL_CONTROLLER_BUTTON_DPAD_LEFT, maple::Controller::Button::DpadLeft },
+  { SDL_CONTROLLER_BUTTON_A, maple::Controller::Button::A },
+  { SDL_CONTROLLER_BUTTON_B, maple::Controller::Button::B },
+  { SDL_CONTROLLER_BUTTON_X, maple::Controller::Button::X },
+  { SDL_CONTROLLER_BUTTON_Y, maple::Controller::Button::Y },
+  { SDL_CONTROLLER_BUTTON_START, maple::Controller::Button::Start },
+};
+
+#ifdef __APPLE__
+void
+deny_exc_bad_access()
+{
+  task_set_exception_ports(mach_task_self(),
+                           EXC_MASK_BAD_ACCESS,
+                           MACH_PORT_NULL, // m_exception_port,
+                           EXCEPTION_DEFAULT,
+                           0);
+}
+#endif
+
+int
+main(int argc, char *argv[])
+{
+#ifdef __APPLE__
+  deny_exc_bad_access();
+#endif
+
+  const ArgumentParser arg_parser(argc, argv);
+
+  /* Optional... */
+  SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+
+  static const auto sdl_subsystems =
+    SDL_INIT_VIDEO | SDL_INIT_JOYSTICK | SDL_INIT_GAMECONTROLLER;
+  if (SDL_Init(sdl_subsystems) != 0) {
+    throw new std::runtime_error("Could not initialize SDL!");
+  }
+
+  std::vector<std::unique_ptr<InputDevice>> inputs;
+  const int joystick_count = SDL_NumJoysticks();
+  InputMapping gamepad;
+  for (int i = 0; i < joystick_count; ++i) {
+    std::unique_ptr<InputDevice> device(new InputDevice());
+
+    device->joystick = SDL_JoystickOpen(i);
+    if (device->joystick == nullptr) {
+      continue;
+    }
+
+    device->controller = SDL_GameControllerOpen(i);
+    const bool sdl_controller_supported = device->controller != nullptr;
+
+    if (sdl_controller_supported) {
+      const char *con_name = SDL_GameControllerName(device->controller);
+      printf("Found SDL2-supported controller '%s'\n", con_name);
+      inputs.emplace_back(std::move(device));
+    } else {
+      const auto it = SupportedInputs.find(SDL_JoystickName(device->joystick));
+      if (it == SupportedInputs.end()) {
+        /* Not a supported gamepad / joystick. */
+        printf("Device not supported: %s\n", SDL_JoystickName(device->joystick));
+        continue;
+      }
+
+      printf("Found Joystick: %s\n", SDL_JoystickName(device->joystick));
+      inputs.emplace_back(std::move(device));
+      gamepad = it->second; /* XXX */
+    }
+  }
+
+  printf("Using %lu joystick devices.\n", inputs.size());
+
+  const int width = 1800, height = width * 3 / 4;
+
+  SDL_Window *windows[2];
+
+  windows[0] =
+    SDL_CreateWindow("penguin1",
+                     SDL_WINDOWPOS_CENTERED,
+                     SDL_WINDOWPOS_CENTERED,
+                     width,
+                     height,
+                     SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+  windows[1] =
+    SDL_CreateWindow("penguin2",
+                     SDL_WINDOWPOS_CENTERED,
+                     SDL_WINDOWPOS_CENTERED,
+                     width,
+                     height,
+                     SDL_WINDOW_SHOWN | SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE);
+  if (windows[0] == nullptr) {
+    throw new std::runtime_error("Could not create SDL Window!");
+  }
+
+  SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
+  SDL_GL_SetAttribute(SDL_GL_ACCELERATED_VISUAL, 1);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 2);
+  SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
+
+  // XXX Disabled for OS X support
+  // SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 3);
+  // SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 3);
+  // SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,
+  // SDL_GL_CONTEXT_PROFILE_COMPATIBILITY
+  // );
+
+  SDL_GLContext glContexts[2];
+  glContexts[0] = SDL_GL_CreateContext(windows[0]);
+  if (glContexts[0] == NULL) {
+    printf("GL Context creation failed failed: %s\n", SDL_GetError());
+    return 0;
+  }
+
+  glContexts[1] = SDL_GL_CreateContext(windows[1]);
+  if (glContexts[1] == NULL) {
+    printf("GL Context 2 creation failed failed: %s\n", SDL_GetError());
+    return 0;
+  }
+
+  SDL_GL_MakeCurrent(windows[0], glContexts[0]);
+
+  if (glewInit() != GLEW_OK) {
+    fprintf(stderr, "Failed to initialize OpenGL loader!\n");
+    return 1;
+  }
+
+  ImGui::CreateContext();
+  ImGuiIO &io = ImGui::GetIO();
+  /*ImFont *font = io.Fonts->AddFontFromMemoryCompressedTTF(
+    proggy_clean_compressed_data, proggy_clean_compressed_size, 13);*/
+  ImFont *font = io.Fonts->AddFontDefault();
+  io.Fonts->Build();
+  io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+  if (arg_parser.get_flag("-viewports").value_or(false)) {
+    io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+  }
+
+  io.ConfigDockingWithShift = true;
+
+  // Whether or not to draw ImGui debugging windows. The menu bar is always drawn.
+  bool draw_windows = true;
+
+  ImGui_ImplSDL2_InitForOpenGL(windows[0], glContexts[0]);
+  ImGui_ImplOpenGL3_Init();
+
+  ////////////////////////////////////////////////////////////////////////
+
+  std::shared_ptr<Console> dreamcasts[2];
+  for (auto &console : dreamcasts) {
+    console = std::make_shared<Console>(new apu::Audio_Dummy());
+  }
+
+  auto gdrom_path = arg_parser.get_string("-gdrom");
+  if (gdrom_path.has_value()) {
+    for (auto &console : dreamcasts) {
+      console->mount_disc(gdrom_path.value());
+    }
+  }
+
+  std::shared_ptr<maple::Controller> controllers[4];
+  if (true) {
+    /* Normal controllers */
+    for (unsigned port = 0; port < 4; ++port) {
+      controllers[port] = std::make_shared<maple::Controller>();
+
+      char buffer[128];
+      snprintf(buffer, sizeof(buffer), ".vmuflash.%u.bin", port);
+
+      std::shared_ptr<maple::VMU> vmu = std::make_shared<maple::VMU>(buffer);
+      controllers[port]->add_device(0u, vmu);
+
+      for (auto &console : dreamcasts) {
+        console->maple_bus()->add_device(port, controllers[port]);
+      }
+    }
+  } else {
+    /* Keyboard */
+    for (auto &console : dreamcasts) {
+      console->maple_bus()->add_device(0, std::make_shared<maple::Keyboard>());
+    }
+  }
+
+  gpu::TextureManager *texture_manager = new gpu::TextureManager(dreamcasts[0].get());
+
+  // Penguin debug and diagnostic interfaces
+  cpu_debugger_window = new gui::CPUWindow(dreamcasts[0], &emulation_continue, font);
+  jit_window = new gui::JitWindow(dreamcasts[0], font);
+  jit_workbench_window = new gui::JitWorkbenchWindow(dreamcasts[0], font);
+  logger_window = new gui::LoggerWindow(dreamcasts[0], font);
+  graphics_debugging_window =
+    new gui::GraphicsWindow(dreamcasts[0], font, texture_manager);
+  memeditor_window = new gui::MemoryEditor(dreamcasts[0], font);
+
+  glViewport(0, 0, int(ImGui::GetIO().DisplaySize.x), int(ImGui::GetIO().DisplaySize.y));
+  glMatrixMode(GL_PROJECTION);
+  glLoadIdentity();
+  glOrtho(0.0, 640.0, 480.0, 0.0, -1.0, 1.0);
+
+  glMatrixMode(GL_MODELVIEW);
+  glLoadIdentity();
+
+  gpu::Renderer *gpu_renderers[2];
+
+  for (int i = 0; i < 2; ++i) {
+    SDL_GL_MakeCurrent(windows[i], glContexts[i]);
+    gpu_renderers[i] = new gpu::BaseOpenGL3Renderer(dreamcasts[i].get());
+  }
+
+  std::thread emulation_thread(
+    std::bind(emulation_thread_entry, dreamcasts[0].get(), dreamcasts[1].get()));
+
+  while (!is_exiting.load()) {
+    SDL_Event event;
+    while (SDL_PollEvent(&event)) {
+      ImGui_ImplSDL2_ProcessEvent(&event);
+      switch (event.type) {
+        case SDL_QUIT:
+          is_exiting.store(true);
+          break;
+
+        case SDL_WINDOWEVENT:
+          switch (event.window.event) {
+            case SDL_WINDOWEVENT_SIZE_CHANGED:
+              // TODO : Possible aspect ratio and or corner pinning
+              glViewport(0, 0, event.window.data1, event.window.data2);
+              break;
+          }
+          break;
+
+        case SDL_KEYDOWN: {
+          switch (event.key.keysym.sym) {
+            case SDLK_ESCAPE:
+              is_exiting.store(true);
+              break;
+            case SDLK_UP:
+              controllers[0]->button_down(maple::Controller::Button::DpadUp);
+              break;
+            case SDLK_DOWN:
+              controllers[0]->button_down(maple::Controller::Button::DpadDown);
+              break;
+            case SDLK_LEFT:
+              controllers[0]->button_down(maple::Controller::Button::DpadLeft);
+              break;
+            case SDLK_RIGHT:
+              controllers[0]->button_down(maple::Controller::Button::DpadRight);
+              break;
+            case SDLK_q:
+              controllers[0]->trigger_left(1.0f);
+              break;
+            case SDLK_e:
+              controllers[0]->trigger_right(1.0f);
+              break;
+            case SDLK_z:
+              controllers[0]->button_down(maple::Controller::Button::A);
+              break;
+            case SDLK_x:
+              controllers[0]->button_down(maple::Controller::Button::B);
+              break;
+            case SDLK_RETURN:
+              controllers[0]->button_down(maple::Controller::Button::Start);
+              break;
+            case SDLK_F1:
+              cpu_debugger_window->toggle_visible();
+              break;
+            case SDLK_F2:
+              logger_window->toggle_visible();
+              break;
+            case SDLK_F3:
+              graphics_debugging_window->toggle_visible();
+              break;
+            case SDLK_F4:
+              memeditor_window->toggle_visible();
+              break;
+            case SDLK_F5:
+              draw_windows = !draw_windows;
+              break;
+            case SDLK_F6:
+              jit_window->toggle_visible();
+              break;
+            case SDLK_F9:
+              emulation_continue.store(
+                emulation_continue.load() == UINT64_MAX ? 0 : UINT64_MAX);
+              break;
+
+            case SDLK_F10: {
+              emulation_continue.store(0);
+              std::this_thread::sleep_for(std::chrono::milliseconds(20));
+
+              static int call = 0;
+              char buff[255];
+              sprintf(buff, "penguin-frame-%04d.save", call++);
+              dreamcasts[0]->save_state(buff);
+              emulation_continue.store(UINT64_MAX);
+            } break;
+
+            case SDLK_F11: {
+              emulation_continue.store(0);
+              std::this_thread::sleep_for(std::chrono::milliseconds(20));
+              dreamcasts[0]->save_state("penguin.save");
+              emulation_continue.store(UINT64_MAX);
+            } break;
+
+            case SDLK_F12: {
+              emulation_continue.store(0);
+              std::this_thread::sleep_for(std::chrono::milliseconds(20));
+              dreamcasts[0]->load_state("penguin.save");
+              emulation_continue.store(UINT64_MAX);
+            } break;
+
+            default:
+              break;
+          }
+        } break;
+
+        case SDL_KEYUP: {
+          switch (event.key.keysym.sym) {
+            case SDLK_UP:
+              controllers[0]->button_up(maple::Controller::Button::DpadUp);
+              break;
+            case SDLK_DOWN:
+              controllers[0]->button_up(maple::Controller::Button::DpadDown);
+              break;
+            case SDLK_LEFT:
+              controllers[0]->button_up(maple::Controller::Button::DpadLeft);
+              break;
+            case SDLK_RIGHT:
+              controllers[0]->button_up(maple::Controller::Button::DpadRight);
+              break;
+            case SDLK_q:
+              controllers[0]->trigger_left(0.0f);
+              break;
+            case SDLK_e:
+              controllers[0]->trigger_right(0.0f);
+              break;
+            case SDLK_z:
+              controllers[0]->button_up(maple::Controller::Button::A);
+              break;
+            case SDLK_x:
+              controllers[0]->button_up(maple::Controller::Button::B);
+              break;
+            case SDLK_c:
+              controllers[0]->button_up(maple::Controller::Button::X);
+              break;
+            case SDLK_v:
+              controllers[0]->button_up(maple::Controller::Button::Y);
+              break;
+            case SDLK_RETURN:
+              controllers[0]->button_up(maple::Controller::Button::Start);
+              break;
+            default:
+              break;
+          }
+        } break;
+
+        case SDL_JOYAXISMOTION: {
+          const auto mapping = gamepad.analog.find(event.jaxis.axis);
+          if (mapping != gamepad.analog.end()) {
+            switch (mapping->second) {
+              case JoystickX:
+                controllers[0]->joystick_x(float(event.jaxis.value) / 65535.0f + 0.5f);
+                break;
+              case JoystickY:
+                controllers[0]->joystick_y(float(event.jaxis.value) / 65535.0f + 0.5f);
+                break;
+              case TriggerLeft:
+                controllers[0]->trigger_left(float(event.jaxis.value) / 65535.0f + 0.5f);
+                break;
+              case TriggerRight:
+                controllers[0]->trigger_right(float(event.jaxis.value) / 65535.0f + 0.5f);
+                break;
+              default:
+                break;
+            }
+          }
+        } break;
+
+        case SDL_JOYBUTTONDOWN: {
+          const auto mapping = gamepad.digital.find(event.jbutton.button);
+          if (mapping != gamepad.digital.end()) {
+            controllers[0]->button_down(mapping->second);
+          }
+        } break;
+
+        case SDL_JOYBUTTONUP: {
+          const auto mapping = gamepad.digital.find(event.jbutton.button);
+          if (mapping != gamepad.digital.end()) {
+            controllers[0]->button_up(mapping->second);
+          }
+        } break;
+
+        case SDL_CONTROLLERBUTTONDOWN: {
+          const auto mapping = sdl2_digital_to_penguin.find(event.cbutton.button);
+          if (mapping != sdl2_digital_to_penguin.end()) {
+            controllers[0]->button_down(mapping->second);
+          }
+        } break;
+
+        case SDL_CONTROLLERBUTTONUP: {
+          const auto mapping = sdl2_digital_to_penguin.find(event.cbutton.button);
+          if (mapping != sdl2_digital_to_penguin.end()) {
+            controllers[0]->button_up(mapping->second);
+          }
+        } break;
+
+        case SDL_CONTROLLERAXISMOTION: {
+          switch (event.caxis.axis) {
+            case SDL_CONTROLLER_AXIS_LEFTX:
+              controllers[0]->joystick_x(float(event.caxis.value) / 65535.0f + 0.5f);
+              break;
+            case SDL_CONTROLLER_AXIS_LEFTY:
+              controllers[0]->joystick_y(float(event.caxis.value) / 65535.0f + 0.5f);
+              break;
+            case SDL_CONTROLLER_AXIS_TRIGGERLEFT:
+              controllers[0]->trigger_left(float(event.caxis.value) / 32768.0f);
+              break;
+            case SDL_CONTROLLER_AXIS_TRIGGERRIGHT:
+              controllers[0]->trigger_right(float(event.caxis.value) / 32768.0f);
+              break;
+            default:
+              break;
+          }
+        } break;
+      }
+    }
+
+    for (int i = 0; i < 2; ++i) {
+      SDL_Window *window = windows[i];
+      SDL_GLContext context = glContexts[i];
+      SDL_GL_MakeCurrent(window, context);
+
+      glClearColor(0.0f, 0.0f, 1.0f, 1.0f);
+      glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+      gpu_renderers[i]->render_frontend(int(ImGui::GetIO().DisplaySize.x),
+                                        int(ImGui::GetIO().DisplaySize.y));
+
+      if (i == 0) {
+        ProfileZoneNamed("ImGuiRender");
+
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplSDL2_NewFrame(window);
+        ImGui::NewFrame();
+
+        draw_dock(dreamcasts[i]);
+        for (unsigned port = 0; port < 4; ++port) {
+          if (!controllers[port]) {
+            continue;
+          }
+
+          const std::shared_ptr<maple::Device> slot0 = controllers[port]->get_device(0u);
+          if (!slot0) {
+            continue;
+          }
+
+          const maple::VMU *const vmu = dynamic_cast<maple::VMU *>(slot0.get());
+          if (vmu != nullptr) {
+            draw_vmu_window(port, vmu);
+          }
+        }
+
+        if (draw_windows) {
+          cpu_debugger_window->draw();
+          jit_window->draw();
+          jit_workbench_window->draw();
+          logger_window->draw();
+          graphics_debugging_window->draw();
+          memeditor_window->draw();
+        }
+
+        ImGui::Render();
+        glViewport(0, 0, (int)io.DisplaySize.x, (int)io.DisplaySize.y);
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+        if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable) {
+          SDL_Window *backup_current_window = SDL_GL_GetCurrentWindow();
+          SDL_GLContext backup_current_context = SDL_GL_GetCurrentContext();
+          ImGui::UpdatePlatformWindows();
+          ImGui::RenderPlatformWindowsDefault();
+          SDL_GL_MakeCurrent(backup_current_window, backup_current_context);
+        }
+      }
+
+      SDL_GL_SwapWindow(window);
+    }
+  }
+
+  emulation_thread.join();
+
+  for (unsigned i = 0; i < 2; ++i) {
+    delete gpu_renderers[i];
+  }
+
+  delete cpu_debugger_window;
+  delete jit_window;
+  delete logger_window;
+  delete graphics_debugging_window;
+  delete memeditor_window;
+
+  inputs.clear();
+
+  /* Uninstall the signal handlers */
+  {
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGBUS, SIG_DFL);
+  }
+
+  for (int i = 0; i < 2; ++i) {
+    SDL_GL_DeleteContext(glContexts[i]);
+    SDL_DestroyWindow(windows[i]);
+  }
+  SDL_Quit();
+
+  return 0;
+}
+#endif

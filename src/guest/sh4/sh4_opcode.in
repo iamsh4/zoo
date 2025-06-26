@@ -1,0 +1,4290 @@
+# mov Rm, Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm0011
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = gpr<u32>(data.m());
+  IR:
+    write_GPR(data.n(), read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("mov R%u, R%u", data.m(), data.n());
+
+
+# mov #imm, Rn
+OPCODE:
+  FORMAT: 1110nnnniiiiiiii
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = extend_sign<OP::i_bits>(data.i());
+  IR:
+    const u32 immediate = extend_sign<OP::i_bits>(data.i());
+    write_GPR(data.n(), Operand::constant<u32>(immediate));
+    return true;
+  DISASSEMBLE:
+    return format_string("mov $%d, R%u", extend_sign<OP::i_bits>(data.i()), data.n());
+
+
+# mova (disp,PC),R0
+OPCODE:
+  FORMAT: 11000111dddddddd
+  CYCLES: 1
+  FLAGS: ILLEGAL_IN_DELAY_SLOT
+  EXECUTE:
+    const u32 disp = (0x000000FFu & data.d()) << 2u;
+    gpr(0u) = (regs.PC & 0xFFFFFFFCu) + 4u + disp;
+  IR:
+    const u32 disp = (0x000000FFu & data.d()) << 2u;
+    const u32 target = (PC & 0xFFFFFFFCu) + 4u + disp;
+    write_GPR(0u, Operand::constant<u32>(target));
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (0x000000FFu & data.d()) << 2u;
+    return format_string("mova $0x%08x, R0", (PC & 0xFFFFFFFCu) + 4u + disp);
+
+
+# mov.w @(disp,PC),Rn
+OPCODE:
+  FORMAT: 1001nnnndddddddd
+  CYCLES: 1
+  FLAGS: ILLEGAL_IN_DELAY_SLOT MEMORY
+  EXECUTE:
+    const u32 disp = (0x000000FFu & data.d()) << 1u;
+    gpr(data.n()) = mem_read<u16>(regs.PC + 4u + disp);
+    gpr(data.n()) = extend_sign<16u>(gpr(data.n()));
+  IR:
+    const u32 disp = (0x000000FFu & data.d()) << 1u;
+    const u32 target = PC + 4u + disp;
+    Operand result = load(Type::Integer16, Operand::constant<u32>(target));
+    result = extend32(result);
+    write_GPR(data.n(), result);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (0x000000FFu & data.d()) << 1u;
+    return format_string("mov.w @$0x%08x, R%u", PC + 4u + disp, data.n());
+
+
+# mov.l @(disp,PC),Rn
+OPCODE:
+  FORMAT: 1101nnnndddddddd
+  CYCLES: 1
+  FLAGS: ILLEGAL_IN_DELAY_SLOT MEMORY
+  EXECUTE:
+    const u32 disp = (0x000000FFu & data.d()) << 2u;
+    gpr(data.n()) = mem_read<u32>((regs.PC & 0xFFFFFFFCu) + 4u + disp);
+  IR:
+    const u32 disp = (0x000000FFu & data.d()) << 2u;
+    const u32 target = (PC & 0xFFFFFFFCu) + 4u + disp;
+    Operand result = load(Type::Integer32, Operand::constant<u32>(target));
+    write_GPR(data.n(), result);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (0x000000FFu & data.d()) << 2u;
+    return format_string("mov.l @$0x%08x, R%u", (PC & 0xFFFFFFFCu) + 4u + disp,
+                         data.n());
+
+
+# mov.b @Rm,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm0000
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 Rm = gpr<u32>(data.m());
+    const u8 read_result = mem_read<u8>(Rm);
+    gpr(data.n()) = extend_sign<8u>(read_result);
+  IR:
+    Operand result = load(Type::Integer8, read_GPR(data.m()));
+    result = extend32(result);
+    write_GPR(data.n(), result);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.b @R%u, R%u", data.m(), data.n());
+
+
+# mov.w @Rm,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm0001
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 Rm = gpr<u32>(data.m());
+    const u16 read_result = mem_read<u16>(Rm);
+    gpr(data.n()) = extend_sign<16u>(read_result);
+  IR:
+    Operand result = load(Type::Integer16, read_GPR(data.m()));
+    result = extend32(result);
+    write_GPR(data.n(), result);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.w @R%u, R%u", data.m(), data.n());
+
+
+# mov.l @Rm,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm0010
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 Rm = gpr<u32>(data.m());
+    const u32 read_result = mem_read<u32>(Rm);
+    gpr(data.n()) = read_result;
+  IR:
+    Operand result = load(Type::Integer32, read_GPR(data.m()));
+    write_GPR(data.n(), result);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.l @R%u, R%u", data.m(), data.n());
+
+
+# mov.b Rm,@Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm0000
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    mem_write<u8>(gpr<u32>(data.n()), gpr<u8>(data.m()));
+  IR:
+    Operand result = bitcast(Type::Integer8, read_GPR(data.m()));
+    store(read_GPR(data.n()), result);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.b R%u, @R%u", data.m(), data.n());
+
+
+# mov.w Rm,@Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm0001
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    mem_write<u16>(gpr<u32>(data.n()), gpr<u16>(data.m()));
+  IR:
+    Operand result = bitcast(Type::Integer16, read_GPR(data.m()));
+    store(read_GPR(data.n()), result);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.w R%u, @R%u", data.m(), data.n());
+
+
+# mov.l Rm,@Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm0010
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()), gpr<u32>(data.m()));
+  IR:
+    store(read_GPR(data.n()), read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.l R%u, @R%u", data.m(), data.n());
+
+
+# mov.b @Rm+,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm0100
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 Rm = gpr<u32>(data.m());
+    const u32 read_result = mem_read<u8>(Rm);
+    gpr(data.n()) = extend_sign<8u>(read_result);
+    if (data.n() != data.m()) gpr(data.m()) += 1u;
+  IR:
+    Operand result = load(Type::Integer8, read_GPR(data.m()));
+    result = extend32(result);
+    write_GPR(data.n(), result);
+    if (data.n() != data.m()) {
+      write_GPR(data.m(), add(read_GPR(data.m()), Operand::constant<u32>(1u)));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.b @R%u+, R%u", data.m(), data.n());
+
+
+# mov.w @Rm+,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm0101
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u16 read_result = mem_read<u16>(gpr(data.m()));
+    gpr(data.n()) = extend_sign<16u>(read_result);
+    if (data.n() != data.m()) gpr(data.m()) += 2u;
+  IR:
+    Operand result = load(Type::Integer16, read_GPR(data.m()));
+    result = extend32(result);
+    write_GPR(data.n(), result);
+    if (data.n() != data.m()) {
+      write_GPR(data.m(), add(read_GPR(data.m()), Operand::constant<u32>(2u)));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.w @R%u+, R%u", data.m(), data.n());
+
+
+# mov.l @Rm+,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm0110
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    gpr(data.n()) = mem_read<u32>(gpr<u32>(data.m()));
+    if (data.n() != data.m()) gpr(data.m()) += 4u;
+  IR:
+    Operand result = load(Type::Integer32, read_GPR(data.m()));
+    write_GPR(data.n(), result);
+    if (data.n() != data.m()) {
+      write_GPR(data.m(), add(read_GPR(data.m()), Operand::constant<u32>(4u)));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.l @R%u+, R%u", data.m(), data.n());
+
+
+# mov.b Rm,@-Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm0100
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    mem_write<u8>(gpr<u32>(data.n()) - 1u, gpr<u8>(data.m()));
+    gpr(data.n()) -= 1u;
+  IR:
+    Operand address = sub(read_GPR(data.n()), Operand::constant<u32>(1u));
+    Operand value = bitcast(Type::Integer8, read_GPR(data.m()));
+    store(address, value);
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.b R%u, @-R%u", data.m(), data.n());
+
+
+# mov.w Rm,@-Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm0101
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    mem_write<u16>(gpr<u32>(data.n()) - 2u, gpr<u16>(data.m()));
+    gpr(data.n()) -= 2u;
+  IR:
+    Operand address = sub(read_GPR(data.n()), Operand::constant<u32>(2u));
+    Operand value = bitcast(Type::Integer16, read_GPR(data.m()));
+    store(address, value);
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.w R%u, @-R%u", data.m(), data.n());
+
+
+# mov.l Rm,@-Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm0110
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()) - 4u, gpr<u32>(data.m()));
+    gpr(data.n()) -= 4u;
+  IR:
+    Operand address = sub(read_GPR(data.n()), Operand::constant<u32>(4u));
+    store(address, read_GPR(data.m()));
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.l R%u, @-R%u", data.m(), data.n());
+
+
+# mov.b @(disp,Rm),R0
+OPCODE:
+  FORMAT: 10000100mmmmdddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = 0x0000000Fu & data.d();
+    const u8 read_byte = mem_read<u8>(gpr<u32>(data.m()) + disp);
+    gpr(0u) = extend_sign<8u>(read_byte);
+  IR:
+    const u32 disp = 0x0000000Fu & data.d();
+    Operand address = add(read_GPR(data.m()), Operand::constant<u32>(disp));
+    Operand value = load(Type::Integer8, address);
+    value = extend32(value);
+    write_GPR(0u, value);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = 0x0000000Fu & data.d();
+    return format_string("mov.b @(R%u + $%u), R0", data.m(), disp);
+
+
+# mov.w @(disp,Rm),R0
+OPCODE:
+  FORMAT: 10000101mmmmdddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = (0x0000000Fu & data.d()) << 1u;
+    const u16 read_word = mem_read<u16>(gpr(data.m()) + disp);
+    gpr(0u) = extend_sign<16u>(read_word);
+  IR:
+    const u32 disp = (0x0000000Fu & data.d()) << 1u;
+    Operand address = add(read_GPR(data.m()), Operand::constant<u32>(disp));
+    Operand value = load(Type::Integer16, address);
+    value = extend32(value);
+    write_GPR(0u, value);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (0x0000000Fu & data.d()) << 1u;
+    return format_string("mov.w @(R%u + $%u), R0", data.m(), disp);
+
+
+# mov.l @(disp,Rm), Rn
+OPCODE:
+  FORMAT: 0101nnnnmmmmdddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = (data.d() & 0x0000000Fu) << 2u;
+    const u32 addr = gpr<u32>(data.m()) + disp;
+    const u32 val = mem_read<u32>(addr);
+    gpr(data.n()) = val;
+  IR:
+    const u32 disp = (data.d() & 0x0000000Fu) << 2u;
+    Operand address = add(read_GPR(data.m()), Operand::constant<u32>(disp));
+    Operand value = load(Type::Integer32, address);
+    write_GPR(data.n(), value);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (data.d() & 0xf) << 2u;
+    return format_string("mov.l @(R%u + $%u), R%u", data.m(), disp, data.n());
+
+
+# mov.b R0,@(disp,Rn)
+OPCODE:
+  FORMAT: 10000000nnnndddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = (data.d() & 0xfu);
+    const u32 addr = gpr(data.n()) + disp;
+    mem_write<u8>(addr, gpr<u8>(0u));
+  IR:
+    const u32 disp = (data.d() & 0xfu);
+    Operand address = add(read_GPR(data.n()), Operand::constant<u32>(disp));
+    Operand value = bitcast(Type::Integer8, read_GPR(0u));
+    store(address, value);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (data.d() & 0xfu);
+    return format_string("mov.b R0, @(R%u + %u)", data.n(), disp);
+
+
+# mov.w R0,@(disp,Rn)
+OPCODE:
+  FORMAT: 10000001nnnndddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = (0xfu & data.d()) << 1u;
+    const u32 addr = gpr(data.n()) + disp;
+    mem_write<u16>(addr, gpr<u16>(0u));
+  IR:
+    const u32 disp = (0xfu & data.d()) << 1u;
+    Operand address = add(read_GPR(data.n()), Operand::constant<u32>(disp));
+    Operand value = bitcast(Type::Integer16, read_GPR(0u));
+    store(address, value);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (0xfu & data.d()) << 1u;
+    return format_string("mov.w R0, @(R%u + $%u)", data.n(), disp);
+
+
+# mov.l Rm,@(disp,Rn)
+OPCODE:
+  FORMAT: 0001nnnnmmmmdddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = (0xfu & data.d()) << 2u;
+    const u32 addr = gpr(data.n()) + disp;
+    mem_write<u32>(addr, gpr(data.m()));
+  IR:
+    const u32 disp = (0xfu & data.d()) << 2u;
+    Operand address = add(read_GPR(data.n()), Operand::constant<u32>(disp));
+    store(address, read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (0xfu & data.d()) << 2u;
+    return format_string("mov.l R%u, @(R%u + $%u)", data.m(), data.n(), disp);
+
+
+# mov.b @(R0,Rm),Rn
+OPCODE:
+  FORMAT: 0000nnnnmmmm1100
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 addr = gpr<u32>(data.m()) + gpr<u32>(0u);
+    const u32 value = mem_read<u8>(addr);
+    gpr(data.n()) = extend_sign<8u>(value);
+  IR:
+    Operand address = add(read_GPR(data.m()), read_GPR(0u));
+    Operand value = load(Type::Integer8, address);
+    value = extend32(value);
+    write_GPR(data.n(), value);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.b @(R0 + R%u), R%u", data.m(), data.n());
+
+
+# mov.w @(R0,Rm),Rn
+OPCODE:
+  FORMAT: 0000nnnnmmmm1101
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 addr = gpr<u32>(data.m()) + gpr<u32>(0u);
+    const u16 read_word = mem_read<u16>(addr);
+    gpr(data.n()) = extend_sign<16u>(read_word);
+  IR:
+    Operand address = add(read_GPR(data.m()), read_GPR(0u));
+    Operand value = load(Type::Integer16, address);
+    value = extend32(value);
+    write_GPR(data.n(), value);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.w @(R0 + R%u), R%u", data.m(), data.n());
+
+
+# mov.l @(R0,Rm),Rn
+OPCODE:
+  FORMAT: 0000nnnnmmmm1110
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 addr = gpr<u32>(data.m()) + gpr<u32>(0u);
+    const u32 read_long = mem_read<u32>(addr);
+    gpr(data.n()) = read_long;
+  IR:
+    Operand address = add(read_GPR(data.m()), read_GPR(0u));
+    Operand value = load(Type::Integer32, address);
+    write_GPR(data.n(), value);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.l @(R0 + R%u), R%u", data.m(), data.n());
+
+
+# mov.b Rm,@(R0,Rn)
+OPCODE:
+  FORMAT: 0000nnnnmmmm0100
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 addr = gpr(data.n()) + gpr(0u);
+    mem_write<u8>(addr, gpr<u8>(data.m()));
+  IR:
+    Operand address = add(read_GPR(data.n()), read_GPR(0u));
+    Operand value = read_GPR(data.m());
+    value = bitcast(Type::Integer8, value);
+    store(address, value);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.b R%u, @(R0 + R%u)", data.m(), data.n());
+
+
+# mov.w Rm,@(R0,Rn)
+OPCODE:
+  FORMAT: 0000nnnnmmmm0101
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 addr = gpr(data.n()) + gpr(0u);
+    mem_write<u16>(addr, gpr<u16>(data.m()));
+  IR:
+    Operand address = add(read_GPR(data.n()), read_GPR(0u));
+    Operand value = read_GPR(data.m());
+    value = bitcast(Type::Integer16, value);
+    store(address, value);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.w R%u, @(R0 + R%u)", data.m(), data.n());
+
+
+# mov.l Rm,@(R0,Rn)
+OPCODE:
+  FORMAT: 0000nnnnmmmm0110
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 addr = gpr(data.n()) + gpr(0u);
+    mem_write<u32>(addr, gpr<u32>(data.m()));
+  IR:
+    Operand address = add(read_GPR(data.n()), read_GPR(0u));
+    Operand value = read_GPR(data.m());
+    store(address, value);
+    return true;
+  DISASSEMBLE:
+    return format_string("mov.l R%u, @(R0 + R%u)", data.m(), data.n());
+
+
+# mov.b @(disp,GBR),R0
+OPCODE:
+  FORMAT: 11000100dddddddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = data.d() & 0x000000ffu;
+    const u8 val = mem_read<u8>(regs.GBR + disp);
+    gpr(0u) = extend_sign<8u>(val);
+  IR:
+    const u32 disp = data.d() & 0x000000ffu;
+    Operand address = add(read_GBR(), Operand::constant<u32>(disp));
+    Operand value = load(Type::Integer8, address);
+    value = extend32(value);
+    write_GPR(0u, value);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = data.d() & 0x000000ffu;
+    return format_string("mov.b @(GBR + %u), $0", disp);
+
+
+# mov.w @(disp,GBR),R0
+OPCODE:
+  FORMAT: 11000101dddddddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = (data.d() & 0x000000ffu) << 1u;
+    const u16 val = mem_read<u16>(regs.GBR + disp);
+    gpr(0u) = extend_sign<16u>(val);
+  IR:
+    const u32 disp = (data.d() & 0x000000ffu) << 1u;
+    Operand address = add(read_GBR(), Operand::constant<u32>(disp));
+    Operand value = load(Type::Integer16, address);
+    value = extend32(value);
+    write_GPR(0u, value);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (data.d() & 0x000000ffu) << 1u;
+    return format_string("mov.w @(GBR + %u), R0", disp);
+
+
+# mov.l @(disp,GBR),R0
+OPCODE:
+  FORMAT: 11000110dddddddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = (data.d() & 0x000000ffu) << 2u;
+    gpr(0u) = mem_read<u32>(regs.GBR + disp);
+  IR:
+    const u32 disp = (data.d() & 0x000000ffu) << 2u;
+    Operand address = add(read_GBR(), Operand::constant<u32>(disp));
+    Operand value = load(Type::Integer32, address);
+    write_GPR(0u, value);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (data.d() & 0x000000ffu) << 2u;
+    return format_string("mov.l @(GBR + %u), R0", disp);
+
+
+# mov.b R0,@(disp,GBR)
+OPCODE:
+  FORMAT: 11000000dddddddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = (0x000000FFu & data.d());
+    mem_write<u8>(regs.GBR + disp, gpr<u8>(0u));
+  IR:
+    const u32 disp = (0x000000FFu & data.d());
+    Operand address = add(read_GBR(), Operand::constant<u32>(disp));
+    store(address, bitcast(Type::Integer8, read_GPR(0u)));
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (0x000000FFu & data.d());
+    return format_string("mov.b R0, @(GBR + %u)", disp);
+
+
+# mov.w R0,@(disp,GBR)
+OPCODE:
+  FORMAT: 11000001dddddddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = (data.d() & 0x000000FFu) << 1u;
+    mem_write<u16>(regs.GBR + disp, gpr<u16>(0u));
+  IR:
+    const u32 disp = (data.d() & 0x000000FFu) << 1u;
+    Operand address = add(read_GBR(), Operand::constant<u32>(disp));
+    store(address, bitcast(Type::Integer16, read_GPR(0u)));
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (data.d() & 0x000000FFu) << 1u;
+    return format_string("mov.w R0, @(GBR + %u)", disp);
+
+
+# mov.l R0,@(disp,GBR)
+OPCODE:
+  FORMAT: 11000010dddddddd
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 disp = (data.d() & 0xffu) << 2u;
+    mem_write<u32>(regs.GBR + disp, gpr<u32>(0u));
+  IR:
+    const u32 disp = (data.d() & 0xffu) << 2u;
+    Operand address = add(read_GBR(), Operand::constant<u32>(disp));
+    store(address, read_GPR(0u));
+    return true;
+  DISASSEMBLE:
+    const u32 disp = (data.d() & 0xffu) << 2u;
+    return format_string("mov.l R0, @(GBR + %u)", disp);
+
+
+# movco.l R0,@Rn
+OPCODE:
+  FORMAT: 0000nnnn01110011
+  CYCLES: 0
+  FLAGS: MEMORY
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'movco.l R0,@Rn' (0000nnnn01110011)");
+
+
+# movli.l @Rm,R0
+OPCODE:
+  FORMAT: 0000mmmm01100011
+  CYCLES: 0
+  FLAGS: MEMORY
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'movli.l @Rm,R0' (0000mmmm01100011)");
+
+
+# movua.1 @Rm,R0
+OPCODE:
+  FORMAT: 0100mmmm10101001
+  CYCLES: 2
+  FLAGS: MEMORY
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'movua.l @Rm,R0' (0100mmmm10101001)");
+
+
+# movua.l @Rm+,R0
+OPCODE:
+  FORMAT: 0100mmmm11101001
+  CYCLES: 2
+  FLAGS: MEMORY
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'movua.l @Rm+,R0' (0100mmmm11101001)");
+
+
+# movt Rn
+OPCODE:
+  FORMAT: 0000nnnn00101001
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = regs.SR.T;
+  IR:
+    const Operand false_value = Operand::constant<u32>(0u);
+    const Operand true_value = Operand::constant<u32>(1u);
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand decision = test(read_SR(), t_bit);
+    write_GPR(data.n(), select(decision, false_value, true_value));
+    return true;
+  DISASSEMBLE:
+    return format_string("movt R%u", data.n());
+
+
+# swap.b Rm, Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm1000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 Rm = gpr<u32>(data.m());
+    gpr(data.n()) = (Rm & 0xffff0000u) | ((Rm & 0xff00u) >> 8u) | ((Rm & 0xffu) << 8u);
+  IR:
+    Operand value = read_GPR(data.m());
+    Operand upper_word = _and(value, Operand::constant<u32>(0xffff0000u));
+    Operand lower_byte1 = _and(value, Operand::constant<u32>(0x000000ffu));
+    Operand lower_byte2 = _and(value, Operand::constant<u32>(0x0000ff00u));
+    lower_byte1 = shiftl(lower_byte1, Operand::constant<u32>(8));
+    lower_byte2 = shiftr(lower_byte2, Operand::constant<u32>(8));
+    value = _or(upper_word, _or(lower_byte1, lower_byte2));
+    write_GPR(data.n(), value);
+    return true;
+  DISASSEMBLE:
+    return format_string("swap.b R%u, R%u", data.m(), data.n());
+
+
+# swap.w Rm, Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm1001
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 Rm = gpr<u32>(data.m());
+    gpr(data.n()) = (Rm >> 16u) | (Rm << 16u);
+  IR:
+    Operand value = read_GPR(data.m());
+    Operand upper_word = shiftr(value, Operand::constant<u32>(16));
+    Operand lower_word = shiftl(value, Operand::constant<u32>(16));
+    value = _or(upper_word, lower_word);
+    write_GPR(data.n(), value);
+    return true;
+  DISASSEMBLE:
+    return format_string("swap.w R%u, R%u", data.m(), data.n());
+
+
+# xtrct Rm, Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm1101
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    u32 temp = (gpr(data.m()) << 16) & 0xFFFF0000;
+    gpr(data.n()) = (gpr(data.n()) >> 16) & 0x0000FFFF;
+    gpr(data.n()) |= temp;
+  IR:
+    Operand value1 = shiftl(read_GPR(data.m()), Operand::constant<u32>(16));
+    Operand value2 = shiftr(read_GPR(data.n()), Operand::constant<u32>(16));
+    write_GPR(data.n(), _or(value1, value2));
+    return true;
+  DISASSEMBLE:
+    return format_string("xtrct R%u,R%u", data.m(), data.n());
+
+
+# add Rm, Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm1100
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) += gpr<u32>(data.m());
+  IR:
+    Operand value = read_GPR(data.m());
+    write_GPR(data.n(), add(read_GPR(data.n()), value));
+    return true;
+  DISASSEMBLE:
+    return format_string("add R%u, R%u", data.m(), data.n());
+
+
+# add #imm, Rn
+OPCODE:
+  FORMAT: 0111nnnniiiiiiii
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) += extend_sign<OP::i_bits>(data.i());
+  IR:
+    Operand value = Operand::constant<u32>(extend_sign<OP::i_bits>(data.i()));
+    write_GPR(data.n(), add(read_GPR(data.n()), value));
+    return true;
+  DISASSEMBLE:
+    return format_string("add $%d, R%u", extend_sign<OP::i_bits>(data.i()), data.n());
+
+
+# addc Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm1110
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    // Basic carry detection from the Renesas Manual
+    const u32 tmp0 = gpr<u32>(data.n());
+    const u32 tmp1 = gpr<u32>(data.n()) + gpr<u32>(data.m());
+    gpr(data.n()) = tmp1 + regs.SR.T;
+    regs.SR.T = (tmp0 > tmp1) || (tmp1 > gpr<u32>(data.n())) ? 1u : 0u;
+  IR:
+    flush(R0 + data.n());
+    flush(R0 + data.m());
+    flush(SR);
+    invalidate(R0 + data.n());
+    invalidate(SR);
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("addc R%u, R%u", data.m(), data.n());
+
+
+# addv Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm1111
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    i32 dest, src, ans;
+    dest = (gpr<i32>(data.n()) >= 0) ? 0 : 1;
+    src = (gpr<i32>(data.m()) >= 0) ? 0 : 1;
+    src += dest;
+    gpr(data.n()) += gpr(data.m());
+    ans = (gpr<i32>(data.n()) >= 0) ? 0 : 1;
+    regs.SR.T = 0;
+    if ((src == 0 || src == 2) && ans == 1) {
+      regs.SR.T = 1;
+    }
+  IR:
+    flush(R0 + data.n());
+    flush(R0 + data.m());
+    flush(SR);
+    invalidate(R0 + data.n());
+    invalidate(SR);
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("addv R%u, R%u", data.m(), data.n());
+
+
+# cmp/eq #imm,R0
+OPCODE:
+  FORMAT: 10001000iiiiiiii
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<u32>(0u) == extend_sign<OP::i_bits>(data.i())) ? 1u : 0u;
+  IR:
+    Operand t_bit = Operand::constant<u32>(SH4Assembler::SR_Bit_T);
+    Operand expect = Operand::constant<u32>(extend_sign<OP::i_bits>(data.i()));
+    Operand decision = cmp_eq(read_GPR(0u), expect);
+    write_SR(bsc(read_SR(), decision, t_bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("cmp/eq $%d, R0", extend_sign<OP::i_bits>(data.i()));
+
+
+# cmp/eq Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm0000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<u32>(data.n()) == gpr<u32>(data.m())) ? 1u : 0u;
+  IR:
+    Operand t_bit = Operand::constant<u8>(SH4Assembler::SR_Bit_T);
+    Operand decision = cmp_eq(read_GPR(data.n()), read_GPR(data.m()));
+    write_SR(bsc(read_SR(), decision, t_bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("cmp/eq R%u, R%u", data.m(), data.n());
+
+
+# cmp/hs Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm0010
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<u32>(data.n()) >= gpr<u32>(data.m())) ? 1u : 0u;
+  IR:
+    Operand t_bit = Operand::constant<u8>(SH4Assembler::SR_Bit_T);
+    Operand decision = cmp_ugte(read_GPR(data.n()), read_GPR(data.m()));
+    write_SR(bsc(read_SR(), decision, t_bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("cmp/hs R%u, R%u", data.m(), data.n());
+
+
+# cmp/ge Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm0011
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<i32>(data.n()) >= gpr<i32>(data.m())) ? 1u : 0u;
+  IR:
+    Operand t_bit = Operand::constant<u8>(SH4Assembler::SR_Bit_T);
+    Operand decision = cmp_gte(read_GPR(data.n()), read_GPR(data.m()));
+    write_SR(bsc(read_SR(), decision, t_bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("cmp/ge R%u, R%u", data.m(), data.n());
+
+
+# cmp/hi Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm0110
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<u32>(data.n()) > gpr<u32>(data.m())) ? 1u : 0u;
+  IR:
+    Operand t_bit = Operand::constant<u8>(SH4Assembler::SR_Bit_T);
+    Operand decision = cmp_ugt(read_GPR(data.n()), read_GPR(data.m()));
+    write_SR(bsc(read_SR(), decision, t_bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("cmp/hi R%u, R%u", data.m(), data.n());
+
+
+# cmp/gt Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm0111
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<i32>(data.n()) > gpr<i32>(data.m())) ? 1u : 0u;
+  IR:
+    Operand t_bit = Operand::constant<u8>(SH4Assembler::SR_Bit_T);
+    Operand decision = cmp_gt(read_GPR(data.n()), read_GPR(data.m()));
+    write_SR(bsc(read_SR(), decision, t_bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("cmp/gt R%u, R%u", data.m(), data.n());
+
+
+# cmp/pl Rn
+OPCODE:
+  FORMAT: 0100nnnn00010101
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<i32>(data.n()) > 0) ? 1u : 0u;
+  IR:
+    Operand t_bit = Operand::constant<u8>(SH4Assembler::SR_Bit_T);
+    Operand zero = Operand::constant<i32>(0);
+    Operand decision = cmp_gt(read_GPR(data.n()), zero);
+    write_SR(bsc(read_SR(), decision, t_bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("cmp/pl R%u", data.n());
+
+
+# cmp/pz Rn
+OPCODE:
+  FORMAT: 0100nnnn00010001
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<i32>(data.n()) >= 0) ? 1u : 0u;
+  IR:
+    Operand t_bit = Operand::constant<u8>(SH4Assembler::SR_Bit_T);
+    Operand zero = Operand::constant<i32>(0);
+    Operand decision = cmp_gte(read_GPR(data.n()), zero);
+    write_SR(bsc(read_SR(), decision, t_bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("cmp/pz R%u", data.n());
+
+
+# cmp/str Rm,Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm1100
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 x = gpr<u32>(data.m()) ^ gpr<u32>(data.n());
+    regs.SR.T = ((x >> 0u)  & 0xffu) &&
+                ((x >> 8u)  & 0xffu) &&
+                ((x >> 16u) & 0xffu) &&
+                ((x >> 24u) & 0xffu) ? 0u : 1u;
+  IR:
+    Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand mask1 = Operand::constant<u32>(0x000000FFu);
+    const Operand mask2 = Operand::constant<u32>(0x0000FF00u);
+    const Operand mask3 = Operand::constant<u32>(0x00FF0000u);
+    const Operand mask4 = Operand::constant<u32>(0xFF000000u);
+    Operand compare = _xor(read_GPR(data.m()), read_GPR(data.n()));
+    const Operand test1 = test(compare, mask1);
+    const Operand test2 = test(compare, mask2);
+    const Operand test3 = test(compare, mask3);
+    const Operand test4 = test(compare, mask4);
+    Operand decision =
+      _and(_and(test1, test2), _and(test3, test4));
+    write_SR(select(decision,
+                    _or(read_SR(), t_bit),
+                    _and(read_SR(), _not(t_bit))
+                    ));
+    return true;
+  DISASSEMBLE:
+    return format_string("cmp/str R%u, R%u", data.m(), data.n());
+
+
+# div0s Rm,Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm0111
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.Q = ((gpr<u32>(data.n()) >> 31u) & 1u) ? 1u : 0u;
+    regs.SR.M = ((gpr<u32>(data.m()) >> 31u) & 1u) ? 1u : 0u;
+    regs.SR.T = (regs.SR.M != regs.SR.Q) ? 1u : 0u;
+  IR:
+    const u32 bits = (1u << SH4Assembler::SR_Bit_M) |
+                     (1u << SH4Assembler::SR_Bit_Q) |
+                     (1u << SH4Assembler::SR_Bit_T);
+    const Operand mask = Operand::constant<u32>(~bits);
+    const Operand q_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_Q);
+    const Operand m_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_M);
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand msb = Operand::constant<u32>(0x80000000u);
+    Operand decision1 = test(read_GPR(data.n()), msb);
+    Operand decision2 = test(read_GPR(data.m()), msb);
+    Operand decision3 =
+      test(_xor(read_GPR(data.n()), read_GPR(data.m())), msb);
+    Operand sr = _and(read_SR(), mask);
+    sr = select(decision1, sr, _or(sr, q_bit));
+    sr = select(decision2, sr, _or(sr, m_bit));
+    sr = select(decision3, sr, _or(sr, t_bit));
+    write_SR(sr);
+    return true;
+  DISASSEMBLE:
+    return format_string("div0s R%u, R%u", data.m(), data.n());
+
+
+# div0u
+OPCODE:
+  FORMAT: 0000000000011001
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.M = regs.SR.Q = regs.SR.T = 0u;
+  IR:
+    const u32 bits = (1u << SH4Assembler::SR_Bit_M) |
+                     (1u << SH4Assembler::SR_Bit_Q) |
+                     (1u << SH4Assembler::SR_Bit_T);
+    Operand mask = Operand::constant<u32>(~bits);
+    write_SR(_and(read_SR(), mask));
+    return true;
+  DISASSEMBLE:
+    return format_string("div0u");
+
+
+# div1 Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm0100
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 m = data.m();
+    const u32 n = data.n();
+
+    const u32 tmp2 = gpr<u32>(m);
+    const u8 old_q = regs.SR.Q;
+    u8 tmp1;
+
+    regs.SR.Q = (0x80000000u & gpr<u32>(n)) != 0u ? 1u : 0u;
+
+    gpr(n) <<= 1u;
+    gpr(n) |= (u32) regs.SR.T;
+
+    const u32 tmp0 = gpr<u32>(n);
+    if (old_q == 0u) {
+      if (regs.SR.M == 0u) {
+        gpr(n) -= tmp2;
+        tmp1 = (gpr<u32>(n) > tmp0) ? 1u : 0u;
+        regs.SR.Q = (regs.SR.Q == 0u) ? tmp1 : (tmp1 == 0u ? 1u : 0u);
+      } else {
+        gpr(n) += tmp2;
+        tmp1 = (gpr<u32>(n) < tmp0) ? 1u : 0u;
+        regs.SR.Q = (regs.SR.Q == 0u) ? (tmp1 == 0u ? 1u : 0u) : tmp1;
+      }
+    } else {
+      if (regs.SR.M == 0u) {
+        gpr(n) += tmp2;
+        tmp1 = (gpr<u32>(n) < tmp0) ? 1u : 0u;
+        regs.SR.Q = (regs.SR.Q == 0u) ? tmp1 : (tmp1 == 0u ? 1u : 0u);
+      } else {
+        gpr(n) -= tmp2;
+        tmp1 = (gpr<u32>(n) > tmp0) ? 1u : 0u;
+        regs.SR.Q = (regs.SR.Q == 0u) ? (tmp1 == 0u ? 1u : 0u) : tmp1;
+      }
+    }
+
+    regs.SR.T = (regs.SR.Q == regs.SR.M) ? 1u : 0u;
+  IR:
+    flush(SR);
+    flush(R0 + data.m());
+    flush(R0 + data.n());
+    invalidate(R0 + data.n());
+    invalidate(SR);
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("div1 R%u, R%u", data.m(), data.n());
+
+
+# dmuls.l Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm1101
+  CYCLES: 2
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const i64 Rn = gpr<i32>(data.n());
+    const i64 Rm = gpr<i32>(data.m());
+    const i64 result = Rn * Rm;
+    memcpy(&regs.MAC, &result, sizeof(i64));
+  IR:
+    const Operand c32 = Operand::constant<u32>(32u);
+    Operand extend_n = extend64(read_GPR(data.n()));
+    Operand extend_m = extend64(read_GPR(data.m()));
+    Operand result = mul(extend_n, extend_m);
+    write_MACH(bitcast(Type::Integer32, shiftr(result, c32)));
+    write_MACL(bitcast(Type::Integer32, result));
+    return true;
+  DISASSEMBLE:
+    return format_string("dmuls.l R%u, R%u", data.m(), data.n());
+
+
+# dmulu.l Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm0101
+  CYCLES: 2
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u64 Rn = gpr<u32>(data.n());
+    const u64 Rm = gpr<u32>(data.m());
+    regs.MAC = Rn * Rm;
+  IR:
+    const Operand c32 = Operand::constant<u32>(32u);
+    Operand extend_n = bitcast(Type::Integer64, read_GPR(data.n()));
+    Operand extend_m = bitcast(Type::Integer64, read_GPR(data.m()));
+    Operand result = umul(extend_n, extend_m);
+    write_MACH(bitcast(Type::Integer32, shiftr(result, c32)));
+    write_MACL(bitcast(Type::Integer32, result));
+    return true;
+  DISASSEMBLE:
+    return format_string("dmulu.l R%u, R%u", data.m(), data.n());
+
+
+# dt Rn
+OPCODE:
+  FORMAT: 0100nnnn00010000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 Rn = gpr<u32>(data.n());
+    regs.SR.T = (Rn == 1u) ? 1u : 0u;
+    gpr(data.n()) = Rn - 1u;
+  IR:
+    Operand one = Operand::constant<u32>(1u);
+    Operand t_bit = Operand::constant<u8>(SH4Assembler::SR_Bit_T);
+    Operand decision = cmp_eq(read_GPR(data.n()), one);
+    write_GPR(data.n(), sub(read_GPR(data.n()), one));
+    write_SR(bsc(read_SR(), decision, t_bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("dt R%u", data.n());
+
+
+# exts.b Rm,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm1110
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = extend_sign<8u>(gpr<u8>(data.m()));
+  IR:
+    Operand value = bitcast(Type::Integer8, read_GPR(data.m()));
+    value = extend32(value);
+    write_GPR(data.n(), value);
+    return true;
+  DISASSEMBLE:
+    return format_string("exts.b R%u, R%u", data.m(), data.n());
+
+
+# exts.w Rm,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm1111
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = extend_sign<16u>(gpr<u16>(data.m()));
+  IR:
+    Operand value = bitcast(Type::Integer16, read_GPR(data.m()));
+    value = extend32(value);
+    write_GPR(data.n(), value);
+    return true;
+  DISASSEMBLE:
+    return format_string("exts.w R%u, R%u", data.m(), data.n());
+
+
+# extu.b Rm,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm1100
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = gpr<u32>(data.m()) & 0x000000FFu;
+  IR:
+    const Operand mask = Operand::constant<u32>(0x000000FFu);
+    write_GPR(data.n(), _and(read_GPR(data.m()), mask));
+    return true;
+  DISASSEMBLE:
+    return format_string("extu.b R%u, R%u", data.m(), data.n());
+
+
+# extu.w Rm,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm1101
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = gpr<u32>(data.m()) & 0x0000FFFFu;
+  IR:
+    const Operand mask = Operand::constant<u32>(0x0000FFFFu);
+    write_GPR(data.n(), _and(read_GPR(data.m()), mask));
+    return true;
+  DISASSEMBLE:
+    return format_string("extu.w R%u, R%u", data.m(), data.n());
+
+
+# mac.l @Rm+,@Rn+
+OPCODE:
+  FORMAT: 0000nnnnmmmm1111
+  CYCLES: 5
+  FLAGS: MEMORY
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'mac.l @Rm+,@Rn+' (0000nnnnmmmm1111)");
+
+
+# mac.w @Rm+,@Rn+
+OPCODE:
+  FORMAT: 0100nnnnmmmm1111
+  CYCLES: 4
+  FLAGS: MEMORY
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'mac.w @Rm+,@Rn+' (0100nnnnmmmm1111)");
+
+
+# mul.l Rm,Rn
+OPCODE:
+  FORMAT: 0000nnnnmmmm0111
+  CYCLES: 2
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 mul_result = gpr<u32>(data.m()) * gpr<u32>(data.n());
+    regs.MACL = mul_result;
+  IR:
+    write_MACL(umul(read_GPR(data.m()), read_GPR(data.n())));
+    return true;
+  DISASSEMBLE:
+    return format_string("mul.l R%u, R%u", data.m(), data.n());
+
+
+# muls.w Rm,Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm1111
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const i32 mul_result = i32(gpr<i16>(data.m())) * i32(gpr<i16>(data.n()));
+    regs.MACL = reinterpret<u32>(mul_result);
+  IR:
+    Operand Rm = bitcast(Type::Integer16, read_GPR(data.m()));
+    Operand Rn = bitcast(Type::Integer16, read_GPR(data.n()));
+    Rm = extend32(Rm);
+    Rn = extend32(Rn);
+    write_MACL(mul(Rm, Rn));
+    return true;
+  DISASSEMBLE:
+    return format_string("muls.w R%u, R%u", data.m(), data.n());
+
+
+# mulu.w Rm,Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm1110
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.MACL = u32(gpr<u16>(data.m())) * u32(gpr<u16>(data.n()));
+  IR:
+    Operand Rm = bitcast(Type::Integer16, read_GPR(data.m()));
+    Operand Rn = bitcast(Type::Integer16, read_GPR(data.n()));
+    Rm = bitcast(Type::Integer32, Rm);
+    Rn = bitcast(Type::Integer32, Rn);
+    write_MACL(umul(Rm, Rn));
+    return true;
+  DISASSEMBLE:
+    return format_string("mulu.w R%u, R%u", data.m(), data.n());
+
+
+# neg Rm,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm1011
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = reinterpret<u32>(-gpr<i32>(data.m()));
+  IR:
+    Operand zero = Operand::constant<u32>(0u);
+    Operand value = read_GPR(data.m());
+    write_GPR(data.n(), sub(zero, value));
+    return true;
+  DISASSEMBLE:
+    return format_string("neg R%u, R%u", data.m(), data.n());
+
+
+# negc Rm,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm1010
+  CYCLES: 1
+  FLAGS: DISABLE_JIT
+  EXECUTE:
+    const u32 temp = 0 - gpr<u32>(data.m());
+    const u32 T = regs.SR.T ? 1 : 0;
+    gpr(data.n()) = u32(temp - T);
+    if (0 < temp) regs.SR.T = 1u;
+    else regs.SR.T = 0u;
+    if (temp < gpr<u32>(data.n())) regs.SR.T = 1u;
+  IR:
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand zero = Operand::constant<u32>(0u);
+    const Operand one = Operand::constant<u32>(1u);
+
+    // temp = 0 - R[m]
+    Operand temp = sub(zero, read_GPR(data.m()));
+
+    // R[n] = temp - T
+    Operand value =
+      select(test(read_SR(), t_bit), temp, sub(temp, one));
+    write_GPR(data.n(), value);
+
+    Operand sr = read_SR();
+    Operand decision = cmp_ult(zero, temp);
+
+    sr = select(decision,
+                _and(sr, _not(t_bit)),
+                _or(sr, t_bit));
+    decision = cmp_ult(temp, value);
+    sr = select(decision, sr, _or(sr, t_bit));
+
+    write_SR(sr);
+    return true;
+  DISASSEMBLE:
+    return format_string("negc R%u,R%u", data.m(), data.n());
+
+
+# sub Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm1000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = gpr<u32>(data.n()) - gpr<u32>(data.m());
+  IR:
+    write_GPR(data.n(), sub(read_GPR(data.n()), read_GPR(data.m())));
+    return true;
+  DISASSEMBLE:
+    return format_string("sub R%u, R%u", data.m(), data.n());
+
+
+# subc Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm1010
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 tmp0 = gpr<u32>(data.n());
+    const u32 tmp1 = tmp0 - gpr<u32>(data.m());
+    gpr(data.n()) = tmp1 - regs.SR.T;
+    regs.SR.T = (tmp0 < tmp1 || tmp1 < gpr<u32>(data.n())) ? 1u : 0u;
+  IR:
+    flush(R0 + data.n());
+    flush(R0 + data.m());
+    flush(SR);
+    invalidate(R0 + data.n());
+    invalidate(SR);
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("subc R%u, R%u", data.m(), data.n());
+
+
+# subv Rm,Rn
+OPCODE:
+  FORMAT: 0011nnnnmmmm1011
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const i32 Rn = gpr<i32>(data.n());
+    const i32 Rm = gpr<i32>(data.m());
+    const i32 dest = (Rn >= 0) ? 0 : 1;
+    const i32 src = ((Rm >= 0) ? 0 : 1) + dest;
+    const i32 result = Rn - Rm;
+    gpr(data.n()) = result;
+    if (src == 1) {
+      if ((result >= 0 ? 0 : 1) + dest == 1) {
+        regs.SR.T = 1;
+      } else {
+        regs.SR.T = 0;
+      }
+    } else {
+      regs.SR.T = 0;
+    }
+  IR:
+    flush(R0 + data.n());
+    flush(R0 + data.m());
+    flush(SR);
+    invalidate(R0 + data.n());
+    invalidate(SR);
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("subv R%u, R%u", data.m(), data.n());
+
+
+# and Rm,Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm1001
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) &= gpr<u32>(data.m());
+  IR:
+    write_GPR(data.n(), _and(read_GPR(data.n()), read_GPR(data.m())));
+    return true;
+  DISASSEMBLE:
+    return format_string("and R%u, R%u", data.m(), data.n());
+
+
+# and #imm,R0
+OPCODE:
+  FORMAT: 11001001iiiiiiii
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 imm = (data.i() & 0x000000FFu);
+    gpr(0u) &= imm;
+  IR:
+    Operand imm = Operand::constant<u32>(data.i() & 0x000000FFu);
+    write_GPR(0u, _and(read_GPR(0u), imm));
+    return true;
+  DISASSEMBLE:
+    const u32 imm = (data.i() & 0x000000FFu);
+    return format_string("and $0x%02x, R0", imm);
+
+
+# and.b #imm,@(R0,GBR)
+OPCODE:
+  FORMAT: 11001101iiiiiiii
+  CYCLES: 3
+  FLAGS: MEMORY
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'and.b #imm,@(R0,GBR)' (11001101iiiiiiii)");
+
+
+# not Rm,Rn
+OPCODE:
+  FORMAT: 0110nnnnmmmm0111
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = ~gpr(data.m());
+  IR:
+    write_GPR(data.n(), _not(read_GPR(data.m())));
+    return true;
+  DISASSEMBLE:
+    return format_string("not R%u, R%u", data.m(), data.n());
+
+
+# or Rm,Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm1011
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) |= gpr<u32>(data.m());
+  IR:
+    write_GPR(data.n(), _or(read_GPR(data.n()), read_GPR(data.m())));
+    return true;
+  DISASSEMBLE:
+    return format_string("or R%u, R%u", data.m(), data.n());
+
+
+# or #imm,R0
+OPCODE:
+  FORMAT: 11001011iiiiiiii
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(0u) |= (0xffu & data.i());
+  IR:
+    Operand imm = Operand::constant<u32>(data.i() & 0xffu);;
+    write_GPR(0u, _or(read_GPR(0u), imm));
+    return true;
+  DISASSEMBLE:
+    return format_string("or $%02x, R0", (data.i() & 0xffu));
+
+
+# or.b #imm,@(R0,GBR)
+OPCODE:
+  FORMAT: 11001111iiiiiiii
+  CYCLES: 3
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 address = regs.GBR + gpr<u32>(0u);
+    const u8 byte_value = mem_read<u8>(address);
+    mem_write<u8>(address, byte_value | data.i());
+  IR:
+    Operand address = add(read_GBR(), read_GPR(0u));
+    Operand value = load(Type::Integer8, address);
+    value = _or(value, Operand::constant<u8>(data.i()));
+    store(address, value);
+    return true;
+  DISASSEMBLE:
+    return format_string("or.b $0x%02x, @(GBR + R0)", data.i());
+
+
+# tas.b @Rn
+OPCODE:
+  FORMAT: 0100nnnn00011011
+  CYCLES: 4
+  FLAGS: MEMORY
+  EXECUTE:
+    const u8 read_byte = mem_read<u8>(gpr<u32>(data.n()));
+
+    if (read_byte == 0u) {
+      regs.SR.T = 1u;
+    } else {
+      regs.SR.T = 0u;
+    }
+
+    mem_write<u8>(gpr<u32>(data.n()), read_byte | 0x80u);
+  IR:
+    const Operand t_bit = Operand::constant<u8>(SH4Assembler::SR_Bit_T);
+    const Operand zero = Operand::constant<u8>(0u);
+    const Operand msb = Operand::constant<u8>(0x80u);
+    Operand address = read_GPR(data.n());
+    Operand value = load(Type::Integer8, address);
+    Operand decision = cmp_eq(value, zero);
+    write_SR(bsc(read_SR(), decision, t_bit));
+    store(address, _or(value, msb));
+    return true;
+  DISASSEMBLE:
+    return format_string("tas.b @R%u", data.n());
+
+
+# tst Rm,Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm1000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<u32>(data.n()) & gpr<u32>(data.m())) ? 0u : 1u;
+  IR:
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    Operand decision = test(read_GPR(data.n()), read_GPR(data.m()));
+    Operand if_none = _or(read_SR(), t_bit);
+    Operand if_any = _and(read_SR(), _not(t_bit));
+    write_SR(select(decision, if_none, if_any));
+    return true;
+  DISASSEMBLE:
+    return format_string("tst R%u, R%u", data.m(), data.n());
+
+
+# tst #imm,R0
+OPCODE:
+  FORMAT: 11001000iiiiiiii
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 masked = 0x000000ffu & data.i();
+    regs.SR.T = (gpr<u32>(0u) & masked) ? 0u : 1u;
+  IR:
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand imm = Operand::constant<u32>(0x000000ffu & data.i());
+    Operand decision = test(read_GPR(0u), imm);
+    Operand if_none = _or(read_SR(), t_bit);
+    Operand if_any = _and(read_SR(), _not(t_bit));
+    write_SR(select(decision, if_none, if_any));
+    return true;
+  DISASSEMBLE:
+    const u32 masked = 0x000000ffu & data.i();
+    return format_string("tst %u, R0", masked);
+
+
+# tst.b #imm,@(R0,GBR)
+OPCODE:
+  FORMAT: 11001100iiiiiiii
+  CYCLES: 3
+  FLAGS: MEMORY
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'tst.b #imm,@(R0,GBR)' (11001100iiiiiiii)");
+
+
+# xor Rm, Rn
+OPCODE:
+  FORMAT: 0010nnnnmmmm1010
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = gpr<u32>(data.n()) ^ gpr<u32>(data.m());
+  IR:
+    write_GPR(data.n(), _xor(read_GPR(data.n()), read_GPR(data.m())));
+    return true;
+  DISASSEMBLE:
+    return format_string("xor R%u, R%u", data.m(), data.n());
+
+
+# xor #imm, R0
+OPCODE:
+  FORMAT: 11001010iiiiiiii
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 imm = (data.i() & 0x000000ffu);
+    gpr(0u) ^= imm;
+  IR:
+    Operand imm = Operand::constant<u32>(data.i() & 0x000000ffu);
+    write_GPR(0u, _xor(read_GPR(0u), imm));
+    return true;
+  DISASSEMBLE:
+    return format_string("xor $0x%02x, R0", data.i());
+
+
+# xor.b #imm,@(R0,GBR)
+OPCODE:
+  FORMAT: 11001110iiiiiiii
+  CYCLES: 3
+  FLAGS: MEMORY
+  EXECUTE:
+    const u32 imm = 0x000000ffu & data.i();
+    const u32 temp = mem_read<u8>(regs.GBR + gpr<u32>(0u));
+    mem_write<u8>(regs.GBR + gpr<u32>(0u), temp ^ imm);
+  IR:
+    Operand imm = Operand::constant<u8>(data.i() & 0x000000ffu);
+    Operand address = add(read_GBR(), read_GPR(0u));
+    Operand value = load(Type::Integer8, address);
+    store(address, _xor(value, imm));
+    return true;
+  DISASSEMBLE:
+    const u32 imm = 0x000000ffu & data.i();
+    return format_string("xor.b $0x%02x, @(GBR + R0)", imm);
+
+
+# rotcl Rn
+OPCODE:
+  FORMAT: 0100nnnn00100100
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 temp = (gpr<u32>(data.n()) >> 31u) & 1u;
+    gpr(data.n()) <<= 1u;
+    gpr(data.n()) |= regs.SR.T;
+    regs.SR.T = temp;
+  IR:
+    const Operand t_index = Operand::constant<u32>(SH4Assembler::SR_Bit_T);
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand one = Operand::constant<u32>(1u);
+    const Operand msb = Operand::constant<u32>(0x80000000u);
+    Operand msb_was_set = test(read_GPR(data.n()), msb);
+    Operand value = shiftl(read_GPR(data.n()), one);
+    value = _or(value, shiftr(_and(read_SR(), t_bit), t_index));
+    write_GPR(data.n(), value);
+    write_SR(select(msb_was_set,
+                    _and(read_SR(), _not(t_bit)),
+                    _or(read_SR(), t_bit)));
+    return true;
+  DISASSEMBLE:
+    return format_string("rotcl R%u", data.n());
+
+
+# rotcr Rn
+OPCODE:
+  FORMAT: 0100nnnn00100101
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 temp = gpr<u32>(data.n()) & 1u;
+    gpr(data.n()) >>= 1u;
+    gpr(data.n()) |= regs.SR.T << 31;
+    regs.SR.T = temp;
+  IR:
+    const Operand t_msb_shift = Operand::constant<u32>(31u - SH4Assembler::SR_Bit_T);
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand one = Operand::constant<u32>(1u);
+    Operand lsb_was_set = test(read_GPR(data.n()), one);
+    Operand value = shiftr(read_GPR(data.n()), one);
+    value = _or(value, shiftl(_and(read_SR(), t_bit), t_msb_shift));
+    write_GPR(data.n(), value);
+    write_SR(select(lsb_was_set,
+                    _and(read_SR(), _not(t_bit)),
+                    _or(read_SR(), t_bit)));
+    return true;
+  DISASSEMBLE:
+    return format_string("rotcr R%u", data.n());
+
+
+# rotl Rn
+OPCODE:
+  FORMAT: 0100nnnn00000100
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<u32>(data.n()) >> 31u) & 1u;
+    gpr(data.n()) <<= 1u;
+    gpr(data.n()) |= regs.SR.T;
+  IR:
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand one = Operand::constant<u32>(1u);
+    const Operand msb = Operand::constant<u32>(0x80000000u);
+    Operand msb_was_set = test(read_GPR(data.n()), msb);
+    write_GPR(data.n(), rotl(read_GPR(data.n()), one));
+    write_SR(select(msb_was_set,
+                    _and(read_SR(), _not(t_bit)),
+                    _or(read_SR(), t_bit)));
+    return true;
+  DISASSEMBLE:
+    return format_string("rotl R%u", data.n());
+
+
+# rotr Rn
+OPCODE:
+  FORMAT: 0100nnnn00000101
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<u32>(data.n()) & 0x1u) == 1u;
+    gpr(data.n()) >>= 1;
+    gpr(data.n()) |= regs.SR.T << 31;
+  IR:
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand one = Operand::constant<u32>(1u);
+    Operand lsb_was_set = test(read_GPR(data.n()), one);
+    write_GPR(data.n(), rotr(read_GPR(data.n()), one));
+    write_SR(select(lsb_was_set,
+                    _and(read_SR(), _not(t_bit)),
+                    _or(read_SR(), t_bit)));
+    return true;
+  DISASSEMBLE:
+    return format_string("rotr R%u", data.n());
+
+
+# shad Rm,Rn
+OPCODE:
+  FORMAT: 0100nnnnmmmm1100
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 sign = gpr<u32>(data.m()) & 0x80000000;
+    const u32 shift_size = gpr<u32>(data.m()) & 0x1Fu;
+
+    if (sign == 0) {
+      gpr(data.n()) <<= shift_size;
+    } else if (shift_size == 0u) {
+      gpr(data.n()) = (gpr<u32>(data.n()) & 0x80000000u) ? 0xFFFFFFFFu : 0x0u;
+    } else {
+      gpr(data.n()) = gpr<i32>(data.n()) >> ((~gpr<u32>(data.m()) & 0x1Fu) + 1u);
+    }
+  IR:
+    flush(R0 + data.n());
+    flush(R0 + data.m());
+    invalidate(R0 + data.n());
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("shad R%u,R%u", data.m(), data.n());
+
+
+# shal Rn
+OPCODE:
+  FORMAT: 0100nnnn00100000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<u32>(data.n()) & 0x80000000u) ? 1u : 0u;
+    gpr(data.n()) <<= 1u;
+  IR:
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand msb = Operand::constant<u32>(0x80000000u);
+    const Operand one = Operand::constant<u32>(1u);
+    Operand decision = test(read_GPR(data.n()), msb);
+    write_SR(select(decision,
+                    _and(read_SR(), _not(t_bit)),
+                    _or(read_SR(), t_bit)));
+    write_GPR(data.n(), shiftl(read_GPR(data.n()), one));
+    return true;
+  DISASSEMBLE:
+    return format_string("shal R%u", data.n());
+
+
+# shar Rn
+OPCODE:
+  FORMAT: 0100nnnn00100001
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 was_negative = (gpr<u32>(data.n()) & 0x80000000u) ? 1u : 0u;
+
+    u32 new_Rn = gpr<u32>(data.n()) >> 1u;
+    if (was_negative) {
+      new_Rn = new_Rn | 0x80000000u;
+    } else {
+      new_Rn = new_Rn & 0x7fffffffu;
+    }
+
+    regs.SR.T = (gpr<u32>(data.n()) & 0x1u) ? 1u : 0u;
+    gpr(data.n()) = new_Rn;
+  IR:
+    flush(R0 + data.n());
+    flush(SR);
+    invalidate(R0 + data.n());
+    invalidate(SR);
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("shar R%u", data.n());
+
+
+# shld Rm,Rn
+OPCODE:
+  FORMAT: 0100nnnnmmmm1101
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    const u32 Rm = gpr<u32>(data.m());
+    const u32 sign = Rm & 0x80000000u;
+
+    if (sign == 0u) {
+      gpr(data.n()) <<= (Rm & 0x0000001fu);
+    } else if ((Rm & 0x0000001fu) == 0u) {
+      gpr(data.n()) = 0u;
+    } else {
+      gpr(data.n()) = gpr<u32>(data.n()) >> ((~Rm & 0x0000001Fu) + 1u);
+    }
+  IR:
+    flush(R0 + data.n());
+    flush(R0 + data.m());
+    invalidate(R0 + data.n());
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("shar R%u,R%u", data.m(), data.n());
+
+
+# shll Rn
+OPCODE:
+  FORMAT: 0100nnnn00000000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr<u32>(data.n()) & 0x80000000u) ? 1u : 0u;
+    gpr(data.n()) <<= 1u;
+  IR:
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand msb = Operand::constant<u32>(0x80000000u);
+    const Operand one = Operand::constant<u32>(1u);
+    write_SR(select(test(read_GPR(data.n()), msb),
+                    _and(read_SR(), _not(t_bit)),
+                    _or(read_SR(), t_bit)));
+    write_GPR(data.n(), shiftl(read_GPR(data.n()), one));
+    return true;
+  DISASSEMBLE:
+    return format_string("shll R%u", data.n());
+
+
+# shll2 Rn
+OPCODE:
+  FORMAT: 0100nnnn00001000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = gpr<u32>(data.n()) << 2u;
+  IR:
+    const Operand two = Operand::constant<u32>(2u);
+    write_GPR(data.n(), shiftl(read_GPR(data.n()), two));
+    return true;
+  DISASSEMBLE:
+    return format_string("shll2 R%u", data.n());
+
+
+# shll8 Rn
+OPCODE:
+  FORMAT: 0100nnnn00011000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = gpr<u32>(data.n()) << 8u;
+  IR:
+    const Operand eight = Operand::constant<u32>(8u);
+    write_GPR(data.n(), shiftl(read_GPR(data.n()), eight));
+    return true;
+  DISASSEMBLE:
+    return format_string("shll8 R%u", data.n());
+
+
+# shll16 Rn
+OPCODE:
+  FORMAT: 0100nnnn00101000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = gpr<u32>(data.n()) << 16u;
+  IR:
+    const Operand sixteen = Operand::constant<u32>(16u);
+    write_GPR(data.n(), shiftl(read_GPR(data.n()), sixteen));
+    return true;
+  DISASSEMBLE:
+    return format_string("shll16 R%u", data.n());
+
+
+# shlr Rn
+OPCODE:
+  FORMAT: 0100nnnn00000001
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = (gpr(data.n()) & 0x1u) ? 1u : 0u;
+    gpr(data.n()) >>= 1u;
+  IR:
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand one = Operand::constant<u32>(1u);
+    write_SR(select(test(read_GPR(data.n()), one),
+                         _and(read_SR(), _not(t_bit)),
+                         _or(read_SR(), t_bit)));
+    write_GPR(data.n(), shiftr(read_GPR(data.n()), one));
+    return true;
+  DISASSEMBLE:
+    return format_string("shlr R%u", data.n());
+
+
+# shlr2 Rn
+OPCODE:
+  FORMAT: 0100nnnn00001001
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) >>= 2u;
+  IR:
+    const Operand two = Operand::constant<u32>(2u);
+    write_GPR(data.n(), shiftr(read_GPR(data.n()), two));
+    return true;
+  DISASSEMBLE:
+    return format_string("shlr2 R%u", data.n());
+
+
+# shlr8 Rn
+OPCODE:
+  FORMAT: 0100nnnn00011001
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) >>= 8u;
+  IR:
+    const Operand eight = Operand::constant<u32>(8u);
+    write_GPR(data.n(), shiftr(read_GPR(data.n()), eight));
+    return true;
+  DISASSEMBLE:
+    return format_string("shlr8 R%u", data.n());
+
+
+# shlr16 Rn
+OPCODE:
+  FORMAT: 0100nnnn00101001
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) >>= 16u;
+  IR:
+    const Operand sixteen = Operand::constant<u32>(16u);
+    write_GPR(data.n(), shiftr(read_GPR(data.n()), sixteen));
+    return true;
+  DISASSEMBLE:
+    return format_string("shlr16 R%u", data.n());
+
+
+# bf label
+OPCODE:
+  FORMAT: 10001011dddddddd
+  CYCLES: 1
+  FLAGS: ILLEGAL_IN_DELAY_SLOT BRANCH CONDITIONAL
+  EXECUTE:
+    if (!regs.SR.T) {
+      const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+      jmp_nodelay(regs.PC + 4u + disp);
+    }
+  IR:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand next_PC = Operand::constant<u32>(PC + sizeof(u16));
+    Operand address = Operand::constant<u32>(PC + 4u + disp);
+    Operand decision = _not(test(read_SR(), t_bit));
+    write_PC(select(decision, next_PC, address));
+    exit(decision);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    return format_string("bf $0x%08x (no-delay)", PC + 4u + disp);
+
+
+# bf/s label
+OPCODE:
+  FORMAT: 10001111dddddddd
+  CYCLES: 1
+  FLAGS: ILLEGAL_IN_DELAY_SLOT BRANCH DELAY_SLOT CONDITIONAL
+  EXECUTE:
+    if (!regs.SR.T) {
+      const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+      jmp_delay(regs.PC + 4u + disp);
+    }
+  IR:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand next_PC = Operand::constant<u32>(PC + sizeof(u16) * 2u);
+    Operand address = Operand::constant<u32>(PC + 4u + disp);
+    Operand decision = _not(test(read_SR(), t_bit));
+    write_PC(select(decision, next_PC, address));
+    translate_delay_slot();
+    exit(decision);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    return format_string("bf/s $0x%08x (delay)", PC + 4u + disp);
+
+
+# bt label
+OPCODE:
+  FORMAT: 10001001dddddddd
+  CYCLES: 1
+  FLAGS: ILLEGAL_IN_DELAY_SLOT BRANCH CONDITIONAL
+  EXECUTE:
+    if (regs.SR.T) {
+      const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+      jmp_nodelay(regs.PC + 4u + disp);
+    }
+  IR:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand next_PC = Operand::constant<u32>(PC + sizeof(u16));
+    Operand address = Operand::constant<u32>(PC + 4u + disp);
+    Operand decision = test(read_SR(), t_bit);
+    write_PC(select(decision, next_PC, address));
+    exit(decision);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    return format_string("bt $0x%08x (no-delay)", PC + 4u + disp);
+
+
+# bt/s label
+OPCODE:
+  FORMAT: 10001101dddddddd
+  CYCLES: 1
+  FLAGS: ILLEGAL_IN_DELAY_SLOT BRANCH DELAY_SLOT CONDITIONAL
+  EXECUTE:
+    if (regs.SR.T) {
+      const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+      jmp_delay(regs.PC + 4u + disp);
+    }
+  IR:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    const Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    const Operand next_PC = Operand::constant<u32>(PC + sizeof(u16) * 2u);
+    Operand address = Operand::constant<u32>(PC + 4u + disp);
+    Operand decision = test(read_SR(), t_bit);
+    write_PC(select(decision, next_PC, address));
+    translate_delay_slot();
+    exit(decision);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    return format_string("bt/s $0x%08x (delay)", PC + 4u + disp);
+
+
+# bra label
+OPCODE:
+  FORMAT: 1010dddddddddddd
+  CYCLES: 1
+  FLAGS: ILLEGAL_IN_DELAY_SLOT BRANCH DELAY_SLOT
+  EXECUTE:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    jmp_delay(regs.PC + 4u + disp);
+  IR:
+    const Operand always = Operand::constant<bool>(true);
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    const Operand target = Operand::constant<u32>(PC + 4u + disp);
+    write_PC(target);
+    translate_delay_slot();
+    exit(always);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    return format_string("bra $0x%08x (delay)", PC + 4u + disp);
+
+
+# braf Rn
+OPCODE:
+  FORMAT: 0000nnnn00100011
+  CYCLES: 4
+  FLAGS: ILLEGAL_IN_DELAY_SLOT BRANCH DELAY_SLOT
+  EXECUTE:
+    jmp_delay(regs.PC + 4u + gpr<u32>(data.n()));
+  IR:
+    const Operand always = Operand::constant<bool>(true);
+    Operand n_offset = Operand::constant<u32>(PC + 4u);
+    write_PC(add(read_GPR(data.n()), n_offset));
+    translate_delay_slot();
+    exit(always);
+    return true;
+  DISASSEMBLE:
+    return format_string("braf ($0x%08x + R%u) (delay)", PC + 4u, data.n());
+
+
+# bsr label
+OPCODE:
+  FORMAT: 1011dddddddddddd
+  CYCLES: 1
+  FLAGS: ILLEGAL_IN_DELAY_SLOT BRANCH DELAY_SLOT CALL
+  EXECUTE:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    regs.PR = regs.PC + 4u;
+    push_call_address(regs.PC + 4u + disp);
+    jmp_delay(regs.PC + 4u + disp);
+  IR:
+    const Operand always = Operand::constant<bool>(true);
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    Operand target = Operand::constant<u32>(PC + disp + 4u);
+    Operand retpc = Operand::constant<u32>(PC + 4u);
+    write_PR(retpc);
+    write_PC(target);
+    translate_delay_slot();
+    call(Type::Integer64, [](fox::Guest* guest, fox::Value new_address){
+      SH4* sh4 = (SH4*)guest;
+      sh4->push_call_address(new_address.u32_value);
+      return fox::Value{}; // Don't need this, but it's required.
+    }, read_PC());
+    exit(always);
+    return true;
+  DISASSEMBLE:
+    const u32 disp = extend_sign<OP::d_bits>(data.d()) << 1u;
+    return format_string("bsr $0x%08x (delay)", PC + 4u + disp);
+
+
+# bsrf Rn
+OPCODE:
+  FORMAT: 0000nnnn00000011
+  CYCLES: 4
+  FLAGS: ILLEGAL_IN_DELAY_SLOT BRANCH DELAY_SLOT CALL
+  EXECUTE:
+    regs.PR = regs.PC + 4u;
+    push_call_address(regs.PC + 4u + gpr<u32>(data.n()));
+    jmp_delay(regs.PC + 4u + gpr<u32>(data.n()));
+  IR:
+    const Operand always = Operand::constant<bool>(true);
+    Operand n_offset = Operand::constant<u32>(PC + 4u);
+    Operand retpc = Operand::constant<u32>(PC + 4u);
+    write_PR(retpc);
+    write_PC(add(read_GPR(data.n()), n_offset));
+    translate_delay_slot();
+    call(Type::Integer64, [](fox::Guest* guest, fox::Value new_address){
+      SH4* sh4 = (SH4*)guest;
+      sh4->push_call_address(new_address.u32_value);
+      return fox::Value{}; // Don't need this, but it's required.
+    }, read_PC());
+    exit(always);
+    return true;
+  DISASSEMBLE:
+    return format_string("bsrf ($0x%08x + R%u) (delay)", PC + 4u, data.n());
+
+
+# jmp @Rn
+OPCODE:
+  FORMAT: 0100nnnn00101011
+  CYCLES: 4
+  FLAGS: ILLEGAL_IN_DELAY_SLOT BRANCH DELAY_SLOT
+  EXECUTE:
+    jmp_delay(gpr(data.n()));
+  IR:
+    const Operand always = Operand::constant<bool>(true);
+    write_PC(read_GPR(data.n()));
+    translate_delay_slot();
+    exit(always);
+    return true;
+  DISASSEMBLE:
+    return format_string("jmp @R%u", data.n());
+
+
+# jsr @Rn
+OPCODE:
+  FORMAT: 0100nnnn00001011
+  CYCLES: 4
+  FLAGS: ILLEGAL_IN_DELAY_SLOT BRANCH DELAY_SLOT CALL
+  EXECUTE:
+    regs.PR = regs.PC + 4u;
+    push_call_address(gpr<u32>(data.n()));
+    jmp_delay(gpr<u32>(data.n()));
+  IR:
+    const Operand always = Operand::constant<bool>(true);
+    Operand retpc = Operand::constant<u32>(PC + 4u);
+    write_PR(retpc);
+    write_PC(read_GPR(data.n()));
+    translate_delay_slot();
+    call(Type::Integer64, [](fox::Guest* guest, fox::Value new_address){
+      SH4* sh4 = (SH4*)guest;
+      sh4->push_call_address(new_address.u32_value);
+      return fox::Value{}; // Don't need this, but it's required.
+    }, read_PC());
+    exit(always);
+    return true;
+  DISASSEMBLE:
+    return format_string("jsr @R%u", data.n());
+
+
+# ret / "rts"
+OPCODE:
+  FORMAT: 0000000000001011
+  CYCLES: 1
+  FLAGS: BRANCH DELAY_SLOT RETURN
+  EXECUTE:
+    pop_call_address();
+    jmp_delay(regs.PR);
+  IR:
+    const Operand always = Operand::constant<bool>(true);
+    write_PC(read_PR());
+    translate_delay_slot();
+    call([](fox::Guest* guest){
+      SH4* sh4 = (SH4*)guest;
+      sh4->pop_call_address();
+    });
+    exit(always);
+    return true;
+  DISASSEMBLE:
+    return format_string("ret");
+
+
+# clrmac
+OPCODE:
+  FORMAT: 0000000000101000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.MACH = 0u;
+    regs.MACL = 0u;
+  IR:
+    const Operand zero = Operand::constant<u32>(0u);
+    write_MACL(zero);
+    write_MACH(zero);
+    return true;
+  DISASSEMBLE:
+    return format_string("clrmac");
+
+
+# clrs
+OPCODE:
+  FORMAT: 0000000001001000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.S = 0u;
+  IR:
+    const Operand s_mask = Operand::constant<u32>(~(1u << SH4Assembler::SR_Bit_S));
+    write_SR(_and(read_SR(), s_mask));
+    return true;
+  DISASSEMBLE:
+    return format_string("clrs");
+
+
+# clrt
+OPCODE:
+  FORMAT: 0000000000001000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = 0u;
+  IR:
+    const Operand t_mask = Operand::constant<u32>(~(1u << SH4Assembler::SR_Bit_T));
+    write_SR(_and(read_SR(), t_mask));
+    return true;
+  DISASSEMBLE:
+    return format_string("clrt");
+
+
+# icbi @Rn
+OPCODE:
+  FORMAT: 0000nnnn11100011
+  CYCLES: 16
+  FLAGS: ILLEGAL_IN_DELAY_SLOT
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'icbi @Rn' (0000nnnn11100011)");
+
+
+# ldc Rm,SR
+OPCODE:
+  FORMAT: 0100mmmm00001110
+  CYCLES: 7
+  FLAGS: PRIVILEGED ILLEGAL_IN_DELAY_SLOT
+  EXECUTE:
+    Registers::Status new_value;
+    new_value.raw = gpr<u32>(data.m()) & 0x700083F3u;
+    if (new_value.RB != regs.SR.RB) {
+      gpr_swap_bank();
+    }
+
+    regs.SR = new_value;
+  IR:
+    const Operand mask = Operand::constant<u32>(0x700083F3u);
+    const Operand rb_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_RB);
+    const Operand new_sr = _and(read_GPR(data.m()), mask);
+    const Operand rb_changed = test(_xor(read_SR(), new_sr), rb_bit);
+    gpr_maybe_swap(rb_changed);
+    write_SR(new_sr);
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc R%u,SR", data.m());
+
+
+# ldc.l @Rm+,SR
+OPCODE:
+  FORMAT: 0100mmmm00000111
+  CYCLES: 9
+  FLAGS: PRIVILEGED MEMORY ILLEGAL_IN_DELAY_SLOT
+  EXECUTE:
+    Registers::Status new_value;
+    new_value.raw = mem_read<u32>(gpr(data.m())) & 0x700083F3u;
+    if (new_value.RB != regs.SR.RB) {
+      gpr_swap_bank();
+    }
+
+    regs.SR = new_value;
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand mask = Operand::constant<u32>(0x700083F3u);
+    const Operand rb_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_RB);
+    const Operand value = load(Type::Integer32, read_GPR(data.m()));
+    const Operand new_sr = _and(value, mask);
+    const Operand rb_changed = test(_xor(read_SR(), new_sr), rb_bit);
+    gpr_maybe_swap(rb_changed);
+    write_SR(new_sr);
+    write_GPR(data.m(), add(read_GPR(data.m()), Operand::constant<u32>(4u)));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc.l @R%u+,SR", data.m());
+
+
+# ldc Rm,GBR
+OPCODE:
+  FORMAT: 0100mmmm00011110
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.GBR = gpr<u32>(data.m());
+  IR:
+    write_GBR(read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc R%u,GBR", data.m());
+
+
+# ldc.l @Rm+,GBR
+OPCODE:
+  FORMAT: 0100mmmm00010111
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    regs.GBR = mem_read<u32>(gpr<u32>(data.m()));
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand value = load(Type::Integer32, read_GPR(data.m()));;
+    write_GBR(value);
+    write_GPR(data.m(), add(read_GPR(data.m()), four));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc.l @R%u+,GBR", data.m());
+
+
+# ldc Rm,VBR
+OPCODE:
+  FORMAT: 0100mmmm00101110
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    regs.VBR = gpr<u32>(data.m());
+  IR:
+    write_VBR(read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc R%u,VBR", data.m());
+
+
+# ldc.l @Rm+,VBR
+OPCODE:
+  FORMAT: 0100mmmm00100111
+  CYCLES: 1
+  FLAGS: MEMORY PRIVILEGED
+  EXECUTE:
+    regs.VBR = mem_read<u32>(gpr<u32>(data.m()));
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand value = load(Type::Integer32, read_GPR(data.m()));;
+    write_VBR(value);
+    write_GPR(data.m(), add(read_GPR(data.m()), four));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc.l @R%u+,VBR", data.m());
+
+
+# ldc Rm,SGR
+OPCODE:
+  FORMAT: 0100mmmm00111010
+  CYCLES: 4
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    regs.SGR = gpr<u32>(data.m());
+  IR:
+    write_SGR(read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc R%u,SGR", data.m());
+
+
+# ldc.l @Rm+,SGR
+OPCODE:
+  FORMAT: 0100mmmm00110110
+  CYCLES: 4
+  FLAGS: MEMORY PRIVILEGED
+  EXECUTE:
+    regs.SGR = mem_read<u32>(gpr<u32>(data.m()));
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand value = load(Type::Integer32, read_GPR(data.m()));;
+    write_SGR(value);
+    write_GPR(data.m(), add(read_GPR(data.m()), four));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc.l @R%u+,SGR", data.m());
+
+
+# ldc Rm,SSR
+OPCODE:
+  FORMAT: 0100mmmm00111110
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    regs.SSR.raw = gpr<u32>(data.m());
+  IR:
+    write_SSR(read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc R%u,SSR", data.m());
+
+
+# ldc @Rm+,SSR
+OPCODE:
+  FORMAT: 0100mmmm00110111
+  CYCLES: 1
+  FLAGS: MEMORY PRIVILEGED
+  EXECUTE:
+    regs.SSR.raw = mem_read<u32>(gpr<u32>(data.m()));
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand value = load(Type::Integer32, read_GPR(data.m()));;
+    write_SSR(value);
+    write_GPR(data.m(), add(read_GPR(data.m()), four));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc.l @R%u+,SSR", data.m());
+
+
+# ldc Rm,SPC
+OPCODE:
+  FORMAT: 0100mmmm01001110
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    regs.SPC = gpr<u32>(data.m());
+  IR:
+    write_SPC(read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc R%u,SPC", data.m());
+
+
+# ldc @Rm+,SPC
+OPCODE:
+  FORMAT: 0100mmmm01000111
+  CYCLES: 1
+  FLAGS: MEMORY PRIVILEGED
+  EXECUTE:
+    regs.SPC = mem_read<u32>(gpr<u32>(data.m()));
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand value = load(Type::Integer32, read_GPR(data.m()));;
+    write_SPC(value);
+    write_GPR(data.m(), add(read_GPR(data.m()), four));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc.l @R%u+,SPC", data.m());
+
+
+# ldc Rm,DBR
+OPCODE:
+  FORMAT: 0100mmmm11111010
+  CYCLES: 4
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    regs.DBR = gpr<u32>(data.m());
+  IR:
+    write_DBR(read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc R%u,DBR", data.m());
+
+
+# ldc @Rm+,DBR
+OPCODE:
+  FORMAT: 0100mmmm11110110
+  CYCLES: 4
+  FLAGS: MEMORY PRIVILEGED
+  EXECUTE:
+    regs.DBR = mem_read<u32>(gpr<u32>(data.m()));
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand value = load(Type::Integer32, read_GPR(data.m()));;
+    write_DBR(value);
+    write_GPR(data.m(), add(read_GPR(data.m()), four));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc.l @R%u+,DBR", data.m());
+
+
+# ldc Rm,Rn_BANK
+OPCODE:
+  FORMAT: 0100mmmm1nnn1110
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    gpr_alt(data.n()) = gpr<u32>(data.m());
+  IR:
+    write_GPR_alt(data.n(), read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc R%u,R%u_BANK", data.m(), data.n());
+
+
+# ldc.l @Rm+,Rn_BANK
+OPCODE:
+  FORMAT: 0100mmmm1nnn0111
+  CYCLES: 1
+  FLAGS: PRIVILEGED MEMORY
+  EXECUTE:
+    const u32 read_result = mem_read<u32>(gpr<u32>(data.m()));
+    gpr_alt(data.n()) = read_result;
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand value = load(Type::Integer32, read_GPR(data.m()));;
+    write_GPR_alt(data.n(), value);
+    write_GPR(data.m(), add(read_GPR(data.m()), four));
+    return true;
+  DISASSEMBLE:
+    return format_string("ldc.l @R%u+,R%u_BANK", data.m(), data.n());
+
+
+# lds Rm,MACH
+OPCODE:
+  FORMAT: 0100mmmm00001010
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.MACH = gpr<u32>(data.m());
+  IR:
+    write_MACH(read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("lds R%u,MACH", data.m());
+
+
+# lds.l @Rm+,MACH
+OPCODE:
+  FORMAT: 0100mmmm00000110
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    regs.MACH = mem_read<u32>(gpr<u32>(data.m()));
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand value = load(Type::Integer32, read_GPR(data.m()));;
+    write_MACH(value);
+    write_GPR(data.m(), add(read_GPR(data.m()), four));
+    return true;
+  DISASSEMBLE:
+    return format_string("lds.l @R%u+, MACH", data.m());
+
+
+# lds Rm,MACL
+OPCODE:
+  FORMAT: 0100mmmm00011010
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.MACL = gpr<u32>(data.m());
+  IR:
+    write_MACL(read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("lds R%u,MACL", data.m());
+
+
+# lds.l @Rm+,MACL
+OPCODE:
+  FORMAT: 0100mmmm00010110
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    regs.MACL = mem_read<u32>(gpr<u32>(data.m()));
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand value = load(Type::Integer32, read_GPR(data.m()));;
+    write_MACL(value);
+    write_GPR(data.m(), add(read_GPR(data.m()), four));
+    return true;
+  DISASSEMBLE:
+    return format_string("lds.l @R%u+, MACL", data.m());
+
+
+# lds Rm,PR
+OPCODE:
+  FORMAT: 0100mmmm00101010
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.PR = gpr<u32>(data.m());
+  IR:
+    write_PR(read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("lds R%u, PR", data.m());
+
+
+# lds.l @Rm+,PR
+OPCODE:
+  FORMAT: 0100mmmm00100110
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    regs.PR = mem_read<u32>(gpr<u32>(data.m()));
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand value = load(Type::Integer32, read_GPR(data.m()));;
+    write_PR(value);
+    write_GPR(data.m(), add(read_GPR(data.m()), four));
+    return true;
+  DISASSEMBLE:
+    return format_string("lds.l @R%u+, PR", data.m());
+
+
+# ldtlb
+OPCODE:
+  FORMAT: 0000000000111000
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'ldtbl' (0000000000111000)");
+
+
+# movca.l R0,@Rn
+OPCODE:
+  FORMAT: 0000nnnn11000011
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()), gpr(0));
+  IR:
+    store(read_GPR(data.n()), read_GPR(0u));
+    return true;
+  DISASSEMBLE:
+    return format_string("movca.l R0, @R%u", data.n());
+
+
+# nop
+OPCODE:
+  FORMAT: 0000000000001001
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    /* No-Operation */
+  IR:
+    return true;
+  DISASSEMBLE:
+    return format_string("nop");
+
+
+# ocbi @Rn
+OPCODE:
+  FORMAT: 0000nnnn10010011
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    /* No implementation needed */
+  IR:
+    return true;
+  DISASSEMBLE:
+    return format_string("ocbi @Rn", data.n());
+
+
+# ocbp @Rn
+OPCODE:
+  FORMAT: 0000nnnn10100011
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    /* No implementation needed */
+  IR:
+    return true;
+  DISASSEMBLE:
+    return format_string("ocbp @Rn", data.n());
+
+
+# ocbwb @Rn
+OPCODE:
+  FORMAT: 0000nnnn10110011
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    /* No implementation needed */
+  IR:
+    return true;
+  DISASSEMBLE:
+    return format_string("ocbwb @Rn", data.n());
+
+
+# pref @Rn
+OPCODE:
+  FORMAT: 0000nnnn10000011
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    /* Flush store queue */
+    const u32 address = gpr<u32>(data.n());
+    if (address >= 0xE0000000u && address < 0xE4000000u) {
+      sq_flush(address);
+    }
+  IR:
+    flush(R0 + data.n());
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("pref @R%u", data.n());
+
+
+# prefi @Rn
+OPCODE:
+  FORMAT: 0000nnnn11010011
+  CYCLES: 10
+  FLAGS: ILLEGAL_IN_DELAY_SLOT
+  EXECUTE:
+    /* Prefetch. Not emulated, and errors are zero-side-effect anyway. */
+  IR:
+    return true;
+  DISASSEMBLE:
+    return format_string("prefi @R%u", data.n());
+
+
+# rte
+OPCODE:
+  FORMAT: 0000000000101011
+  CYCLES: 5
+  FLAGS: ILLEGAL_IN_DELAY_SLOT BRANCH DELAY_SLOT PRIVILEGED
+  EXECUTE:
+    if (regs.SR.RB != regs.SSR.RB) {
+      gpr_swap_bank();
+    }
+    regs.SR = regs.SSR;
+    jmp_delay(regs.SPC);
+  IR:
+    const Operand rb_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_RB);
+    const Operand rb_changed = test(_xor(read_SR(), read_SSR()), rb_bit);
+    gpr_maybe_swap(rb_changed);
+    write_SR(read_SSR());
+    write_PC(read_SPC());
+    translate_delay_slot();
+    exit(Operand::constant<bool>(true));
+    return true;
+  DISASSEMBLE:
+    return format_string("rte");
+
+
+# sets
+OPCODE:
+  FORMAT: 0000000001011000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.S = 1u;
+  IR:
+    Operand s_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_S);
+    write_SR(_or(read_SR(), s_bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("sets");
+
+
+# sett
+OPCODE:
+  FORMAT: 0000000000011000
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    regs.SR.T = 1u;
+  IR:
+    Operand t_bit = Operand::constant<u32>(1u << SH4Assembler::SR_Bit_T);
+    write_SR(_or(read_SR(), t_bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("sett");
+
+# sleep
+OPCODE:
+  FORMAT: 0000000000011011
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    /* Not emulated */
+  IR:
+    return true;
+  DISASSEMBLE:
+    return format_string("sleep");
+
+
+# stc SR,Rn
+OPCODE:
+  FORMAT: 0000nnnn00000010
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    gpr(data.n()) = regs.SR.raw;
+  IR:
+    write_GPR(data.n(), read_SR());
+    return true;
+  DISASSEMBLE:
+    return format_string("stc SR, R%u", data.n());
+
+
+# stc.l SR,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn00000011
+  CYCLES: 1
+  FLAGS: PRIVILEGED MEMORY
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()) - 4u, regs.SR.raw);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_SR());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("src.l SR, @-R%u", data.n());
+
+
+# stc GBR,Rn
+OPCODE:
+  FORMAT: 0000nnnn00010010
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = regs.GBR;
+  IR:
+    write_GPR(data.n(), read_GBR());
+    return true;
+  DISASSEMBLE:
+    return format_string("stc GBR, R%u", data.n());
+
+
+# stc.l GBR,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn00010011
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()) - 4u, regs.GBR);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_GBR());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("stc.l GBR,@-R%u", data.n());
+
+
+# stc VBR,Rn
+OPCODE:
+  FORMAT: 0000nnnn00100010
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    gpr(data.n()) = regs.VBR;
+  IR:
+    write_GPR(data.n(), read_VBR());
+    return true;
+  DISASSEMBLE:
+    return format_string("stc VBR,R%u", data.n());
+
+
+# stc.l VBR,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn00100011
+  CYCLES: 1
+  FLAGS: PRIVILEGED MEMORY
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()) - 4u, regs.VBR);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_VBR());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("stc.l VBR,@-R%u", data.n());
+
+
+# stc SGR,Rn
+OPCODE:
+  FORMAT: 0000nnnn00111010
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = regs.SGR;
+  IR:
+    write_GPR(data.n(), read_SGR());
+    return true;
+  DISASSEMBLE:
+    return format_string("stc SGR,R%u", data.n());
+
+
+# stc.l SGR,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn00110010
+  CYCLES: 1
+  FLAGS: PRIVILEGED MEMORY
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()) - 4u, regs.SGR);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_SGR());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("stc.l SGR,@-R%u", data.n());
+
+
+# stc SSR,Rn
+OPCODE:
+  FORMAT: 0000nnnn00110010
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    gpr(data.n()) = regs.SSR.raw;
+  IR:
+    write_GPR(data.n(), read_SSR());
+    return true;
+  DISASSEMBLE:
+    return format_string("stc SSR,R%u", data.n());
+
+
+# stc.l SSR,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn00110011
+  CYCLES: 1
+  FLAGS: PRIVILEGED MEMORY
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()) - 4u, regs.SSR.raw);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_SSR());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("stc.l SSR,@-R%u", data.n());
+
+
+# stc SPC,Rn
+OPCODE:
+  FORMAT: 0000nnnn01000010
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    gpr(data.n()) = regs.SPC;
+  IR:
+    write_GPR(data.n(), read_SPC());
+    return true;
+  DISASSEMBLE:
+    return format_string("stc SPC,R%u", data.n());
+
+
+# stc.l SPC,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn01000011
+  CYCLES: 1
+  FLAGS: PRIVILEGED MEMORY
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()) - 4u, regs.SPC);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_SPC());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("stc.l SPC,@-R%u", data.n());
+
+
+# stc DBR,Rn
+OPCODE:
+  FORMAT: 0000nnnn11111010
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    gpr(data.n()) = regs.DBR;
+  IR:
+    write_GPR(data.n(), read_DBR());
+    return true;
+  DISASSEMBLE:
+    return format_string("stc DBR,R%u", data.n());
+
+
+# stc.l DBR,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn11110010
+  CYCLES: 1
+  FLAGS: PRIVILEGED MEMORY
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()) - 4u, regs.DBR);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_DBR());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("stc.l DBR,@-R%u", data.n());
+
+
+# stc Rm_BANK,Rn
+OPCODE:
+  FORMAT: 0000nnnn1mmm0010
+  CYCLES: 1
+  FLAGS: PRIVILEGED
+  EXECUTE:
+    gpr(data.n()) = gpr_alt<u32>(data.m());
+  IR:
+    write_GPR(data.n(), read_GPR_alt(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("stc R%u_BANK,R%u", data.m(), data.n());
+
+
+# stc.l RM_BANK,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn1mmm0011
+  CYCLES: 1
+  FLAGS: PRIVILEGED MEMORY
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()) - 4u, gpr_alt<u32>(data.m()));
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_GPR_alt(data.m()));
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("stc.l R%u_BANK,@-R%u", data.m(), data.n());
+
+
+# sts MACH,Rn
+OPCODE:
+  FORMAT: 0000nnnn00001010
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = regs.MACH;
+  IR:
+    write_GPR(data.n(), read_MACH());
+    return true;
+  DISASSEMBLE:
+    return format_string("sts MACH,R%u", data.n());
+
+
+# sts.l MACH,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn00000010
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    mem_write(gpr<u32>(data.n()) - 4u, regs.MACH);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_MACH());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("sts.l MACH, @-R%u", data.n());
+
+
+# sts MACL,Rn
+OPCODE:
+  FORMAT: 0000nnnn00011010
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = regs.MACL;
+  IR:
+    write_GPR(data.n(), read_MACL());
+    return true;
+  DISASSEMBLE:
+    return format_string("sts MACL, R%u", data.n());
+
+
+# sts.l MACL,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn00010010
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    mem_write(gpr<u32>(data.n()) - 4u, regs.MACL);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_MACL());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("sts.l MACL,@-R%u", data.n());
+
+
+# sts PR,Rn
+OPCODE:
+  FORMAT: 0000nnnn00101010
+  CYCLES: 1
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    gpr(data.n()) = regs.PR;
+  IR:
+    write_GPR(data.n(), read_PR());
+    return true;
+  DISASSEMBLE:
+    return format_string("sts PR,R%u", data.n());
+
+
+# sts.l PR,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn00100010
+  CYCLES: 1
+  FLAGS: MEMORY
+  EXECUTE:
+    mem_write(gpr<u32>(data.n()) - 4u, regs.PR);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_PR());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("sts.l PR, @-R%u", data.n());
+
+
+# synco
+OPCODE:
+  FORMAT: 0000000010101011
+  CYCLES: 0
+  FLAGS: NO_FLAGS
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'synco' (0000000010101011)");
+
+
+# trapa #imm
+OPCODE:
+  FORMAT: 11000011iiiiiiii
+  CYCLES: 13
+  FLAGS: ILLEGAL_IN_DELAY_SLOT
+  EXECUTE:
+    throw std::runtime_error("Unimplemented opcode 'trapa #imm' (11000011iiiiiiii)");
+
+
+# fmov.s FRm,FRn (SZ=0), fmov.d DRm,DRn (SZ=1)
+OPCODE:
+  FORMAT: 1111nnnnmmmm1100
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_FR FPU_SZ
+  EXECUTE:
+    if (FPU.FPSCR.SZ == 0u) {
+      FPU.FR(data.n()) = FPU.FR(data.m());
+    } else {
+      if ((data.n() & 1u) && (data.m() & 1u)) {
+        FPU.XD(data.n() >> 1u) = FPU.XD(data.m() >> 1u);
+      } else if (data.n() & 1u) {
+        FPU.XD(data.n() >> 1u) = FPU.DR(data.m() >> 1u);
+      } else if (data.m() & 1u) {
+        FPU.DR(data.n() >> 1u) = FPU.XD(data.m() >> 1u);
+      } else {
+        FPU.DR(data.n() >> 1u) = FPU.DR(data.m() >> 1u);
+      }
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_SZ)) {
+      write_SP(data.n(), read_SP(data.m()));
+    } else {
+      if ((data.n() & 1u) && (data.m() & 1u)) {
+        write_DP_alt(data.n() >> 1u, read_DP_alt(data.m() >> 1u));
+      } else if (data.n() & 1u) {
+        write_DP_alt(data.n() >> 1u, read_DP(data.m() >> 1u));
+      } else if (data.m() & 1u) {
+        write_DP(data.n() >> 1u, read_DP_alt(data.m() >> 1u));
+      } else {
+        write_DP(data.n() >> 1u, read_DP(data.m() >> 1u));
+      }
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fmov.x FR%u,FR%u", data.m(), data.n());
+
+
+# fmov.s @Rm,FRn (SZ=0), fmov.d @Rm,DRn (SZ=1)
+OPCODE:
+  FORMAT: 1111nnnnmmmm1000
+  CYCLES: 1
+  FLAGS: MEMORY USES_FPU FPU_FR FPU_SZ
+  EXECUTE:
+    if (FPU.FPSCR.SZ == 0u) {
+      const u32 int_data = mem_read<u32>(gpr<u32>(data.m()));
+      FPU.FR(data.n()) = reinterpret<float>(int_data);
+    } else {
+      const u64 int_data = mem_read<u64>(gpr<u32>(data.m()));
+      if (data.n() & 1) {
+        FPU.XD(data.n() >> 1u) = reinterpret<double>(int_data);
+      } else {
+        FPU.DR(data.n() >> 1u) = reinterpret<double>(int_data);
+      }
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_SZ)) {
+      write_SP(data.n(), load(Type::Float32, read_GPR(data.m())));
+    } else {
+      if (data.n() & 1) {
+        write_DP_alt(data.n() >> 1u, load(Type::Float64, read_GPR(data.m())));
+      } else {
+        write_DP(data.n() >> 1u, load(Type::Float64, read_GPR(data.m())));
+      }
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fmov.x @R%u, FR%u", data.m(), data.n());
+
+
+# fmov.s FRm, @Rn (PR=0), fmov.d DRm, @Rn (PR=1)
+OPCODE:
+  FORMAT: 1111nnnnmmmm1010
+  CYCLES: 1
+  FLAGS: MEMORY USES_FPU FPU_FR FPU_SZ
+  EXECUTE:
+    if (FPU.FPSCR.SZ == 0u) {
+      const float float_data = FPU.FR(data.m());
+      mem_write<u32>(gpr<u32>(data.n()), reinterpret<u32>(float_data));
+    } else {
+      double double_data;
+      if (data.m() & 1) {
+        double_data = FPU.XD(data.m() >> 1u);
+      } else {
+        double_data = FPU.DR(data.m() >> 1u);
+      }
+      mem_write<u64>(gpr<u32>(data.n()), reinterpret<u64>(double_data));
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_SZ)) {
+      store(read_GPR(data.n()), read_SP(data.m()));
+    } else {
+      if (data.m() & 1) {
+        store(read_GPR(data.n()), read_DP_alt(data.m() >> 1u));
+      } else {
+        store(read_GPR(data.n()), read_DP(data.m() >> 1u));
+      }
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fmov.x FR%u, @R%u", data.m(), data.n());
+
+
+# fmov.d @Rm+,DRn
+OPCODE:
+  FORMAT: 1111nnnnmmmm1001
+  CYCLES: 1
+  FLAGS: MEMORY USES_FPU FPU_FR FPU_SZ
+  EXECUTE:
+    if (FPU.FPSCR.SZ == 0u) {
+      const u32 float_data = mem_read<u32>(gpr<u32>(data.m()));
+      FPU.FR(data.n()) = reinterpret<float>(float_data);
+      gpr(data.m()) += 4u;
+    } else {
+      const u64 double_data = mem_read<u64>(gpr<u32>(data.m()));
+      if (data.n() & 1u) {
+        FPU.XD(data.n() >> 1u) = reinterpret<double>(double_data);
+      } else {
+        FPU.DR(data.n() >> 1u) = reinterpret<double>(double_data);
+      }
+
+      gpr(data.m()) += 8u;
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_SZ)) {
+      write_SP(data.n(), load(Type::Float32, read_GPR(data.m())));
+      write_GPR(data.m(), add(read_GPR(data.m()), Operand::constant<u32>(4u)));
+    } else {
+      if (data.n() & 1u) {
+        write_DP_alt(data.n() >> 1u, load(Type::Float64, read_GPR(data.m())));
+      } else {
+        write_DP(data.n() >> 1u, load(Type::Float64, read_GPR(data.m())));
+      }
+      write_GPR(data.m(), add(read_GPR(data.m()), Operand::constant<u32>(8u)));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fmov.x @R%u+,FR%u", data.m(), data.n());
+
+
+# fmov.s FRm,@-Rn (SZ=0), fmov.d DRm,@-Rn (SZ=1)
+OPCODE:
+  FORMAT: 1111nnnnmmmm1011
+  CYCLES: 1
+  FLAGS: MEMORY USES_FPU FPU_FR FPU_SZ
+  EXECUTE:
+    if (FPU.FPSCR.SZ == 0u) {
+      const float float_data = FPU.FR(data.m());
+      mem_write<u32>(gpr<u32>(data.n()) - 4u, reinterpret<u32>(float_data));
+      gpr(data.n()) -= 4u;
+    } else {
+      if (data.m() & 1u) {
+        const double double_data = FPU.XD(data.m() >> 1u);
+        mem_write<u64>(gpr<u32>(data.n()) - 8u, reinterpret<u64>(double_data));
+      } else {
+        const double double_data = FPU.DR(data.m() >> 1u);
+        mem_write<u64>(gpr<u32>(data.n()) - 8u, reinterpret<u64>(double_data));
+      }
+
+      gpr(data.n()) -= 8u;
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_SZ)) {
+      write_GPR(data.n(), sub(read_GPR(data.n()), Operand::constant<u32>(4u)));
+      store(read_GPR(data.n()), read_SP(data.m()));
+    } else {
+      write_GPR(data.n(), sub(read_GPR(data.n()), Operand::constant<u32>(8u)));
+      if (data.m() & 1u) {
+        store(read_GPR(data.n()), read_DP_alt(data.m() >> 1u));
+      } else {
+        store(read_GPR(data.n()), read_DP(data.m() >> 1u));
+      }
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fmov.x FR%u, @-R%u", data.m(), data.n());
+
+
+# fmov.d @(R0,Rm),FRn
+OPCODE:
+  FORMAT: 1111nnnnmmmm0110
+  CYCLES: 1
+  FLAGS: MEMORY USES_FPU FPU_FR FPU_SZ
+  EXECUTE:
+    const u32 address = gpr<u32>(0) + gpr<u32>(data.m());
+
+    if (FPU.FPSCR.SZ == 0u) {
+      const u32 int_data = mem_read<u32>(address);
+      FPU.FR(data.n()) = reinterpret<float>(int_data);
+    } else {
+      const u64 int_data = mem_read<u64>(address);
+      if (data.n() & 1u) {
+        FPU.XD(data.n() >> 1u) = reinterpret<double>(int_data);
+      } else {
+        FPU.DR(data.n() >> 1u) = reinterpret<double>(int_data);
+      }
+    }
+  IR:
+    const Operand address = add(read_GPR(0u), read_GPR(data.m()));
+    if (!(flags & SH4::BasicBlock::FPSCR_SZ)) {
+      write_SP(data.n(), load(Type::Float32, address));
+    } else {
+      write_DP(data.n() >> 1u, load(Type::Float64, address));
+      if (data.n() & 1u) {
+        write_DP_alt(data.n() >> 1u, load(Type::Float64, address));
+      } else {
+        write_DP(data.n() >> 1u, load(Type::Float64, address));
+      }
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fmov.x @(R0,R%u),FR%u", data.m(), data.n());
+
+
+# fmov.s FRm,@(R0,Rn) (SZ=0), fmov.d DRm,@(R0,Rn) (SZ=1)
+OPCODE:
+  FORMAT: 1111nnnnmmmm0111
+  CYCLES: 1
+  FLAGS: MEMORY USES_FPU FPU_FR FPU_SZ
+  EXECUTE:
+    const u32 address = gpr<u32>(0) + gpr<u32>(data.n());
+
+    if (FPU.FPSCR.SZ == 0u) {
+      const float float_data = FPU.FR(data.m());
+      mem_write<u32>(address, reinterpret<u32>(float_data));
+    } else {
+      if (data.m() & 1u) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when SZ=1): fmov.d DRm,@(R0,Rn)");
+      }
+
+      double double_data;
+      if (data.m() & 1u) {
+        double_data = FPU.XD(data.m() >> 1u);
+      } else {
+        double_data = FPU.DR(data.m() >> 1u);
+      }
+      mem_write<u64>(address, reinterpret<u64>(double_data));
+    }
+  IR:
+    Operand address = add(read_GPR(0u), read_GPR(data.n()));
+    if (!(flags & SH4::BasicBlock::FPSCR_SZ)) {
+      store(address, read_SP(data.m()));
+    } else {
+      if (data.m() & 1u) {
+        store(address, read_DP_alt(data.m() >> 1u));
+      } else {
+        store(address, read_DP(data.m() >> 1u));
+      }
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fmov.x FR%u, @(R%u + R0)", data.m(), data.n());
+
+
+# fldi0 FRn
+OPCODE:
+  FORMAT: 1111nnnn10001101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_FR FPU_PR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 1u) {
+      throw std::runtime_error("Invalid Opcode (when PR=1): fldi0 FRn");
+    }
+
+    FPU.FR(data.n()) = 0.0f;
+  IR:
+    if (flags & SH4::BasicBlock::FPSCR_PR) {
+      throw std::runtime_error("Invalid Opcode (when PR=1): fldi0 FRn");
+    }
+
+    write_SP(data.n(), Operand::constant<f32>(0.0f));
+    return true;
+  DISASSEMBLE:
+    return format_string("fldi0 FR%u", data.n());
+
+
+# fldi1 FRn
+OPCODE:
+  FORMAT: 1111nnnn10011101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_FR FPU_PR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 1u) {
+      throw std::runtime_error("Invalid Opcode (when PR=1): fldi0 FRn");
+    }
+
+    FPU.FR(data.n()) = 1.0f;
+  IR:
+    if (flags & SH4::BasicBlock::FPSCR_PR) {
+      throw std::runtime_error("Invalid Opcode (when PR=1): fldi1 FRn");
+    }
+
+    write_SP(data.n(), Operand::constant<f32>(1.0f));
+    return true;
+  DISASSEMBLE:
+    return format_string("fldi1 FR%u", data.n());
+
+
+# flds FRm,FPUL
+OPCODE:
+  FORMAT: 1111mmmm00011101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_FR
+  EXECUTE:
+    FPU.FPUL = reinterpret<u32>(FPU.FR(data.m()));
+  IR:
+    write_FPUL(bitcast(Type::Integer32, read_SP(data.m())));
+    return true;
+  DISASSEMBLE:
+    return format_string("flds FR%u, FPUL", data.m());
+
+
+# fsts FPUL,FRn
+OPCODE:
+  FORMAT: 1111nnnn00001101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_FR
+  EXECUTE:
+    FPU.FR(data.n()) = reinterpret<float>(FPU.FPUL);
+  IR:
+    write_SP(data.n(), bitcast(Type::Float32, read_FPUL()));
+    return true;
+  DISASSEMBLE:
+    return format_string("fsts FPUL, FR%u", data.n());
+
+
+# fabs FRn
+OPCODE:
+  FORMAT: 1111nnnn01011101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_PR FPU_FR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      FPU.FR(data.n()) = std::abs(FPU.FR(data.n()));
+    } else {
+      if (data.n() & 1u) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fabs FRn");
+      }
+
+      const u8 DRn = data.n() >> 1u;
+      FPU.DR(DRn) = std::abs(FPU.DR(DRn));
+    }
+  IR:
+    if (flags & SH4::BasicBlock::FPSCR_PR) {
+      if (data.n() & 1u) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fabs FRn");
+      }
+    }
+
+    flush(SP0 + data.n());
+    invalidate(SP0 + data.n());
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("fabs FR%u", data.n());
+
+
+# fsub.s FRm,FRn (PR=0), fsub.d DRm,DRn (PR=1)
+OPCODE:
+  FORMAT: 1111nnnnmmmm0001
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_PR FPU_FR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      FPU.FR(data.n()) = FPU.FR(data.n()) - FPU.FR(data.m());
+    } else {
+      if ((data.m() & 1u) || (data.n() & 1)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fsub.d DRm,DRn");
+      }
+
+      const u8 DRn = data.n() >> 1u;
+      const u8 DRm = data.m() >> 1u;
+      FPU.DR(DRn) = FPU.DR(DRn) - FPU.DR(DRm);
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_PR)) {
+      write_SP(data.n(), sub(read_SP(data.n()), read_SP(data.m())));
+    } else {
+      if ((data.m() & 1u) || (data.n() & 1)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fsub.d DRm,DRn");
+      }
+
+      write_DP(data.n() >> 1u, sub(read_DP(data.n() >> 1u), read_DP(data.m() >> 1u)));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fsub.x FR%u, FR%u", data.m(), data.n());
+
+
+# fmul.s FRm,FRn (PR=0), fmul.d DRm,DRn (PR=1)
+OPCODE:
+  FORMAT: 1111nnnnmmmm0010
+  CYCLES: 2
+  FLAGS: USES_FPU FPU_PR FPU_FR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      FPU.FR(data.n()) = FPU.FR(data.n()) * FPU.FR(data.m());
+    } else {
+      if ((data.m() & 1u) || (data.n() & 1)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fmul.d DRm,DRn");
+      }
+
+      const u8 DRn = data.n() >> 1u;
+      const u8 DRm = data.m() >> 1u;
+      FPU.DR(DRn) = FPU.DR(DRn) * FPU.DR(DRm);
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_PR)) {
+      write_SP(data.n(), mul(read_SP(data.n()), read_SP(data.m())));
+    } else {
+      if ((data.m() & 1u) || (data.n() & 1)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fmul.d DRm,DRn");
+      }
+
+      write_DP(data.n() >> 1u, mul(read_DP(data.n() >> 1u), read_DP(data.m() >> 1u)));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fmul.x FR%u, FR%u", data.m(), data.n());
+
+
+# fmac FR0,FRm,FRn
+OPCODE:
+  FORMAT: 1111nnnnmmmm1110
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_PR FPU_FR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      FPU.FR(data.n()) = FPU.FR(0u) * FPU.FR(data.m()) + FPU.FR(data.n());
+    } else {
+      throw std::runtime_error("Invalid Opcode (when PR=1): fmac FR0,FRm,FRn");
+    }
+  IR:
+    if (flags & SH4::BasicBlock::FPSCR_PR) {
+      throw std::runtime_error("Invalid Opcode (when PR=1): fmac FR0,FRm,FRn");
+    }
+    write_SP(data.n(), add(mul(read_SP(0u), read_SP(data.m())), read_SP(data.n())));
+    return true;
+  DISASSEMBLE:
+    return format_string("fmac.s FR0, FR%u, FR%u", data.m(), data.n());
+
+
+# fdiv.s FRm,FRn (PR=0), fdiv.d DRm,DRn (PR=1)
+OPCODE:
+  FORMAT: 1111nnnnmmmm0011
+  CYCLES: 14
+  FLAGS: USES_FPU FPU_PR FPU_FR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      FPU.FR(data.n()) = FPU.FR(data.n()) / FPU.FR(data.m());
+    } else {
+      if ((data.m() & 1u) || (data.n() & 1u)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fdiv.d DRm,DRn");
+      }
+
+      const u8 DRn = data.n() >> 1u;
+      const u8 DRm = data.m() >> 1u;
+      FPU.DR(DRn) = FPU.DR(DRn) / FPU.DR(DRm);
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_PR)) {
+      write_SP(data.n(), div(read_SP(data.n()), read_SP(data.m())));
+    } else {
+      if ((data.m() & 1u) || (data.n() & 1)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fdiv.d DRm,DRn");
+      }
+
+      write_DP(data.n() >> 1u, div(read_DP(data.n() >> 1u), read_DP(data.m() >> 1u)));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fdiv FR%u, FR%u", data.n(), data.m());
+
+
+# fsqrt FRn (PR=0), fsqrt DRn (PR=1)
+OPCODE:
+  FORMAT: 1111nnnn01101101
+  CYCLES: 30
+  FLAGS: USES_FPU FPU_PR FPU_FR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      FPU.FR(data.n()) = sqrtf(FPU.FR(data.n()));
+    } else {
+      if (data.n() & 1) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fsqrt DRn");
+      }
+
+      const u8 DRn = data.n() >> 1u;
+      FPU.DR(DRn) = sqrt(FPU.DR(DRn));
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_PR)) {
+      write_SP(data.n(), sqrt(read_SP(data.n())));
+    } else {
+      if (data.n() & 1) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fsqrt DRn");
+      }
+
+      write_DP(data.n() >> 1u, sqrt(read_DP(data.n() >> 1u)));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fsqrt.x FR%u", data.n());
+
+
+# fcmp/eq FRm,FRn (PR=0), fcmp/eq DRm,DRn (PR=1)
+OPCODE:
+  FORMAT: 1111nnnnmmmm0100
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_PR FPU_FR DISABLE_JIT
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      regs.SR.T = (FPU.FR(data.m()) == FPU.FR(data.n())) ? 1u : 0u;
+    } else {
+      if ((data.m() & 1) || (data.n() & 1)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fcmp/eq DRm,DRn");
+      }
+
+      regs.SR.T = FPU.DR(data.m() >> 1u) == FPU.DR(data.n() >> 1u);
+    }
+  IR:
+    if (flags & SH4::BasicBlock::FPSCR_PR) {
+      if ((data.m() & 1) || (data.n() & 1)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fcmp/eq DRm,DRn");
+      }
+    }
+
+    flush(SP0 + data.m());
+    flush(SP0 + data.n());
+    flush(SR);
+    invalidate(SR);
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("fcmp/eq.x FR%u, FR%u", data.m(), data.n());
+
+
+# float.s FPUL,FRn (PR=0), float.d FPUL,DRn (PR=1)
+OPCODE:
+  FORMAT: 1111nnnn00101101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_PR FPU_FR DISABLE_JIT
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      FPU.FR(data.n()) = float(reinterpret<i32>(FPU.FPUL));
+    } else {
+      if (data.n() & 1u) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): float.d FPUL,DRn");
+      }
+
+      const u8 DRn = data.n() >> 1u;
+      FPU.DR(DRn) = double(reinterpret<i32>(FPU.FPUL));
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_PR)) {
+      write_SP(data.n(), casti2f(Type::Float32, read_FPUL()));
+    } else {
+      if (data.n() & 1) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): float.d FPUL,DRn");
+      }
+
+      write_SP(data.n() >> 1u, casti2f(Type::Float64, read_FPUL()));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("float.x FPUL, FR%u", data.n());
+
+
+# ftrc.s FRm,FPUL (PR=0), ftrc.d DRm,FPUL (PR=1)
+OPCODE:
+  FORMAT: 1111mmmm00111101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_PR FPU_FR DISABLE_JIT
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      FPU.FPUL = reinterpret<u32>(i32(FPU.FR(data.m())));
+    } else {
+      if (data.m() & 1) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): ftrc.d DRm,FPUL");
+      }
+
+      const u8 DRm = data.m() >> 1u;
+      FPU.FPUL = reinterpret<u32>(i32(FPU.DR(DRm)));
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_PR)) {
+      write_FPUL(castf2i(Type::Integer32, read_SP(data.m())));
+    } else {
+      if (data.m() & 1) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): ftrc.d DRm,FPUL");
+      }
+
+      write_FPUL(castf2i(Type::Integer32, read_DP(data.m() >> 1u)));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("ftrc.x FR%u, FPUL", data.m());
+
+
+# fipr FVm,FVn (PR=0), reserved (PR=1)
+OPCODE:
+  FORMAT: 1111nnmm11101101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_PR FPU_FR DISABLE_JIT
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      const u8 FVm = data.m() << 2u;
+      const u8 FVn = data.n() << 2u;
+      FPU.FR(FVn | 3u) = (FPU.FR(FVm | 0u) * FPU.FR(FVn | 0u)) +
+                         (FPU.FR(FVm | 1u) * FPU.FR(FVn | 1u)) +
+                         (FPU.FR(FVm | 2u) * FPU.FR(FVn | 2u)) +
+                         (FPU.FR(FVm | 3u) * FPU.FR(FVn | 3u));
+    } else {
+      throw std::runtime_error("Invalid Opcode (when PR=1): 1111nnmm11101101");
+    }
+  IR:
+    if (flags & SH4::BasicBlock::FPSCR_PR) {
+      throw std::runtime_error("Invalid Opcode (when PR=1): 1111nnmm11101101");
+    }
+
+    const u8 FVm = data.m() << 2u;
+    const u8 FVn = data.n() << 2u;
+    for (unsigned i = 0; i < 4; ++i) {
+      flush(SP0 + (FVm | i));
+      flush(SP0 + (FVn | i));
+    }
+    invalidate(SP0 + (FVn | 3u));
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("fipr FV%u, FV%u", data.m(), data.n());
+
+
+# ftrv XMTRX,FVn (PR=0), reserved (PR=1)
+OPCODE:
+  FORMAT: 1111nn0111111101
+  CYCLES: 4
+  FLAGS: USES_FPU FPU_PR FPU_FR DISABLE_JIT
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      const u8 FVn = data.n() << 2u;
+      const float FVt0 = FPU.FR(FVn | 0u);
+      const float FVt1 = FPU.FR(FVn | 1u);
+      const float FVt2 = FPU.FR(FVn | 2u);
+      const float FVt3 = FPU.FR(FVn | 3u);
+
+      FPU.FR(FVn | 0u) = (FVt0 * FPU.XF(0u)) +  (FVt1 * FPU.XF(4u)) +
+                         (FVt2 * FPU.XF(8u)) +  (FVt3 * FPU.XF(12u));
+      FPU.FR(FVn | 1u) = (FVt0 * FPU.XF(1u)) +  (FVt1 * FPU.XF(5u)) +
+                         (FVt2 * FPU.XF(9u)) +  (FVt3 * FPU.XF(13u));
+      FPU.FR(FVn | 2u) = (FVt0 * FPU.XF(2u)) +  (FVt1 * FPU.XF(6u)) +
+                         (FVt2 * FPU.XF(10u)) + (FVt3 * FPU.XF(14u));
+      FPU.FR(FVn | 3u) = (FVt0 * FPU.XF(3u))  + (FVt1 * FPU.XF(7u)) +
+                         (FVt2 * FPU.XF(11u)) + (FVt3 * FPU.XF(15u));
+    } else {
+      throw std::runtime_error("Invalid Opcode (when PR=1): 1111nn0111111101");
+    }
+  IR:
+    if (flags & SH4::BasicBlock::FPSCR_PR) {
+      throw std::runtime_error("Invalid Opcode (when PR=1): 1111nn0111111101");
+    }
+
+    for (unsigned i = 0; i < 16; ++i) {
+      flush(SP0alt + i);
+    }
+
+    const u8 FVn = data.n() << 2u;
+    for (unsigned i = 0; i < 4; ++i) {
+      flush(SP0 + (FVn | i));
+      invalidate(SP0 + (FVn | i));
+    }
+
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("ftrv XMTRX, FV%u", data.n());
+
+
+# fsrra FRn (PR=0), reserved (PR=1)
+OPCODE:
+  FORMAT: 1111nnnn01111101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_PR FPU_FR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      FPU.FR(data.n()) = 1.0f / sqrtf(FPU.FR(data.n()));
+    } else {
+      throw std::runtime_error("Invalid Opcode (when PR=1): 1111nnnn01111101");
+    }
+  IR:
+    if (flags & SH4::BasicBlock::FPSCR_PR) {
+      throw std::runtime_error("Invalid Opcode (when PR=1): 1111nnnn01111101");
+    }
+
+    const Operand one = Operand::constant<f32>(1.0f);
+    write_SP(data.n(), div(one, sqrt(read_SP(data.n()))));
+    return true;
+  DISASSEMBLE:
+    return format_string("fsrra.s FR%u", data.n());
+
+
+# fsca FPUL,DRn (PR=0), reserved (PR=1)
+OPCODE:
+  FORMAT: 1111nnn011111101
+  CYCLES: 3
+  FLAGS: USES_FPU FPU_PR FPU_FR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      const u32 FRn = data.n() << 1u;
+      const float angle = (FPU.FPUL & 0xffffu) / 65536.0f;
+      const float from = angle * 2.0f * M_PI;
+      FPU.FR(FRn) = sinf(from);
+      FPU.FR(FRn + 1u) = cosf(from);
+    } else {
+      throw std::runtime_error("Invalid Opcode (when PR=1): 1111nnn011111101");
+    }
+  IR:
+    if (flags & SH4::BasicBlock::FPSCR_PR) {
+      throw std::runtime_error("Invalid Opcode (when PR=1): 1111nnn011111101");
+    }
+
+    const u32 FRn = data.n() << 1u;
+    flush(FPUL);
+    invalidate(SP0 + FRn, true);
+    invalidate(SP0 + FRn + 1u, true);
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("fsca.s FPUL, DR%u", data.n());
+
+
+# fneg FRn (PR=0), fneg DRn (PR=1)
+OPCODE:
+  FORMAT: 1111nnnn01001101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_PR FPU_FR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      FPU.FR(data.n()) = -FPU.FR(data.n());
+    } else {
+      if (data.n() & 1u) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fneg DRn");
+      }
+
+      FPU.DR(data.n() >> 1u) = -FPU.DR(data.n() >> 1u);
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_PR)) {
+      const Operand negative = Operand::constant<f32>(-1.0f);
+      write_SP(data.n(), mul(read_SP(data.n()), negative));
+    } else {
+      if (data.n() & 1u) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fneg DRn");
+      }
+
+      const Operand negative = Operand::constant<f64>(-1.0);
+      write_DP(data.n() >> 1u, mul(read_DP(data.n() >> 1u), negative));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fneg.x FR%u", data.n());
+
+
+# fadd.s FRm,FRn (PR=0), fadd.d DRm,DRn (PR=1)
+OPCODE:
+  FORMAT: 1111nnnnmmmm0000
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_PR FPU_FR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      FPU.FR(data.n()) = FPU.FR(data.n()) + FPU.FR(data.m());
+    } else {
+      if ((data.n() & 1u) || (data.m() & 1)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fadd.d DRm,DRn");
+      }
+
+      const u8 DRn = data.n() >> 1u;
+      const u8 DRm = data.m() >> 1u;
+      FPU.DR(DRn) = FPU.DR(DRn) + FPU.DR(DRm);
+    }
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_PR)) {
+      write_SP(data.n(), add(read_SP(data.n()), read_SP(data.m())));
+    } else {
+      if ((data.n() & 1u) || (data.m() & 1)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fadd.d DRm,DRn");
+      }
+
+      write_DP(data.n() >> 1u, add(read_DP(data.n() >> 1u), read_DP(data.m() >> 1u)));
+    }
+    return true;
+  DISASSEMBLE:
+    return format_string("fadd.x FR%u, FR%u", data.m(), data.n());
+
+
+# fcmp/gt FRm,FRn (PR=0), fcmp/gt DRm,DRn (PR=1)
+OPCODE:
+  FORMAT: 1111nnnnmmmm0101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_PR FPU_FR
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      regs.SR.T = (FPU.FR(data.n()) > FPU.FR(data.m())) ? 1u : 0u;
+    } else {
+      if ((data.n() & 1u) || (data.m() & 1)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fcmp/gt DRm,DRn");
+      }
+
+      const u8 DRn = data.n() >> 1u;
+      const u8 DRm = data.m() >> 1u;
+      regs.SR.T = (FPU.DR(DRn) > FPU.DR(DRm)) ? 1u : 0u;
+    }
+  IR:
+    if (flags & SH4::BasicBlock::FPSCR_PR) {
+      if ((data.n() & 1u) || (data.m() & 1)) {
+        throw std::runtime_error("Invalid Opcode (odd FPU register when PR=1): fcmp/gt DRm,DRn");
+      }
+    }
+
+    flush(SP0 + data.m());
+    flush(SP0 + data.n());
+    flush(SR);
+    invalidate(SR);
+    interpret_upcall();
+    return true;
+  DISASSEMBLE:
+    return format_string("fcmp/gt.x FR%u, FR%u", data.m(), data.n());
+
+
+# fcnvds FPUL,DRm
+OPCODE:
+  FORMAT: 1111mmm010111101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_FR DISABLE_JIT
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      throw std::runtime_error("Invalid Opcode (odd FPU register when PR=0): fcnvds FPUL,DRm");
+    }
+
+    FPU.FPUL = reinterpret<u32>(float(FPU.DR(data.m())));
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_PR)) {
+      throw std::runtime_error("Invalid Opcode (odd FPU register when PR=0): fcnvds FPUL,DRm");
+    }
+
+    const Operand f32_value = resizef(Type::Float32, read_DP(data.m()));
+    write_FPUL(bitcast(Type::Integer32, f32_value));
+    return true;
+  DISASSEMBLE:
+    return format_string("fcnvds FPUL, DR%u", data.m());
+
+
+# fcnvsd FPUL,DRn
+OPCODE:
+  FORMAT: 1111nnn010101101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_FR DISABLE_JIT
+  EXECUTE:
+    if (FPU.FPSCR.PR == 0u) {
+      throw std::runtime_error("Invalid Opcode (odd FPU register when PR=0): fcnvsd FPUL,DRn");
+    }
+
+    FPU.DR(data.n()) = reinterpret<float>(FPU.FPUL);
+  IR:
+    if (!(flags & SH4::BasicBlock::FPSCR_PR)) {
+      throw std::runtime_error("Invalid Opcode (odd FPU register when PR=0): fcnvsd FPUL,DRn");
+    }
+
+    const Operand f32_value = bitcast(Type::Float32, read_FPUL());
+    write_DP(data.n(), resizef(Type::Float64, f32_value));
+    return true;
+  DISASSEMBLE:
+    return format_string("fcnvsd FPUL, DR%u", data.n());
+
+
+# lds Rm,FPSCR
+OPCODE:
+  FORMAT: 0100mmmm01101010
+  CYCLES: 1
+  FLAGS: BARRIER USES_FPU
+  EXECUTE:
+    static constexpr u32 FPSCR_MASK = 0x003FFFFFu;
+    FPUState::FPUStatus new_value;
+    new_value.raw = gpr<u32>(data.m()) & FPSCR_MASK;
+    if (new_value.FR != FPU.FPSCR.FR) {
+      FPU.swap_bank();
+    }
+
+    FPU.FPSCR = new_value;
+  IR:
+    const Operand mask = Operand::constant<u32>(0x003FFFFFu);
+    const Operand fr_bit = Operand::constant<u32>(1u << FPSCR_Bit_FR);
+    const Operand new_value = _and(read_GPR(data.m()), mask);
+    const Operand fr_changed = test(_xor(read_FPSCR(), new_value), fr_bit);
+    fpu_maybe_swap(fr_changed);
+    write_FPSCR(new_value);
+    return true;
+  DISASSEMBLE:
+    return format_string("lds R%u,FPSCR", data.m());
+
+
+# sts FPSCR,Rn
+OPCODE:
+  FORMAT: 0000nnnn01101010
+  CYCLES: 1
+  FLAGS: USES_FPU
+  EXECUTE:
+    gpr(data.n()) = FPU.FPSCR.raw & 0x003FFFFFu;
+  IR:
+    write_GPR(data.n(), read_FPSCR());
+    return true;
+  DISASSEMBLE:
+    return format_string("sts FPSCR,R%u", data.n());
+
+
+# lds.l @Rm+,FPSCR
+OPCODE:
+  FORMAT: 0100mmmm01100110
+  CYCLES: 1
+  FLAGS: MEMORY BARRIER USES_FPU
+  EXECUTE:
+    static constexpr u32 FPSCR_MASK = 0x003FFFFFu;
+    FPUState::FPUStatus new_value;
+    new_value.raw = mem_read<u32>(gpr<u32>(data.m())) & FPSCR_MASK;
+    if (new_value.FR != FPU.FPSCR.FR) {
+      FPU.swap_bank();
+    }
+
+    FPU.FPSCR = new_value;
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand mask = Operand::constant<u32>(0x003FFFFFu);
+    const Operand fr_bit = Operand::constant<u32>(1u << FPSCR_Bit_FR);
+    const Operand new_value = _and(mask, load(Type::Integer32, read_GPR(data.m())));
+    const Operand fr_changed = test(_xor(read_FPSCR(), new_value), fr_bit);
+    fpu_maybe_swap(fr_changed);
+    write_FPSCR(new_value);
+    write_GPR(data.m(), add(read_GPR(data.m()), Operand::constant<u32>(4u)));
+    return true;
+  DISASSEMBLE:
+    return format_string("lds.l @R%u+,FPSCR", data.m());
+
+
+# sts.l FPSCR,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn01100010
+  CYCLES: 1
+  FLAGS: MEMORY USES_FPU
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()) - 4u, FPU.FPSCR.raw & 0x003FFFFFu);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_FPSCR());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("sts.l FPSCR,@-R%u", data.n());
+
+
+# lds Rm,FPUL
+OPCODE:
+  FORMAT: 0100mmmm01011010
+  CYCLES: 1
+  FLAGS: USES_FPU
+  EXECUTE:
+    FPU.FPUL = gpr<u32>(data.m());
+  IR:
+    write_FPUL(read_GPR(data.m()));
+    return true;
+  DISASSEMBLE:
+    return format_string("lds R%u,FPUL", data.m());
+
+
+# sts FPUL,Rn
+OPCODE:
+  FORMAT: 0000nnnn01011010
+  CYCLES: 1
+  FLAGS: USES_FPU
+  EXECUTE:
+    gpr(data.n()) = FPU.FPUL;
+  IR:
+    write_GPR(data.n(), read_FPUL());
+    return true;
+  DISASSEMBLE:
+    return format_string("sts FPUL,R%u", data.n());
+
+
+# lds.l @Rm+,FPUL
+OPCODE:
+  FORMAT: 0100mmmm01010110
+  CYCLES: 1
+  FLAGS: MEMORY USES_FPU
+  EXECUTE:
+    FPU.FPUL = mem_read<u32>(gpr<u32>(data.m()));
+    gpr(data.m()) += 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    write_FPUL(load(Type::Integer32, read_GPR(data.m())));
+    write_GPR(data.m(), add(read_GPR(data.m()), four));
+    return true;
+  DISASSEMBLE:
+    return format_string("lds.l @R%u+,FPUL", data.m());
+
+
+# sts.l FPUL,@-Rn
+OPCODE:
+  FORMAT: 0100nnnn01010010
+  CYCLES: 1
+  FLAGS: MEMORY USES_FPU
+  EXECUTE:
+    mem_write<u32>(gpr<u32>(data.n()) - 4u, FPU.FPUL);
+    gpr(data.n()) -= 4u;
+  IR:
+    const Operand four = Operand::constant<u32>(4u);
+    Operand address = sub(read_GPR(data.n()), four);
+    store(address, read_FPUL());
+    write_GPR(data.n(), address);
+    return true;
+  DISASSEMBLE:
+    return format_string("sts.l FPUL,@-R%u", data.n());
+
+
+# frchg
+OPCODE:
+  FORMAT: 1111101111111101
+  CYCLES: 1
+  FLAGS: USES_FPU FPU_FR
+  EXECUTE:
+    FPU.FPSCR.FR = ~FPU.FPSCR.FR;
+    FPU.swap_bank();
+  IR:
+    const Operand bit = Operand::constant<u32>(1u << FPSCR_Bit_FR);
+    write_FPSCR(_xor(read_FPSCR(), bit));
+    flush(FPSCR); /* TODO Required? */
+    fpu_maybe_swap(Operand::constant<bool>(true));
+    return true;
+  DISASSEMBLE:
+    return format_string("frchg");
+
+
+# fschg
+OPCODE:
+  FORMAT: 1111001111111101
+  CYCLES: 1
+  FLAGS: BARRIER USES_FPU FPU_SZ
+  EXECUTE:
+    FPU.FPSCR.SZ = ~FPU.FPSCR.SZ;
+  IR:
+    const Operand bit = Operand::constant<u32>(1u << FPSCR_Bit_SZ);
+    write_FPSCR(_xor(read_FPSCR(), bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("fschg");
+
+
+# fpchg
+OPCODE:
+  FORMAT: 1111011111111101
+  CYCLES: 1
+  FLAGS: BARRIER USES_FPU FPU_PR
+  EXECUTE:
+    FPU.FPSCR.PR = ~FPU.FPSCR.PR;
+  IR:
+    const Operand bit = Operand::constant<u32>(1u << FPSCR_Bit_PR);
+    write_FPSCR(_xor(read_FPSCR(), bit));
+    return true;
+  DISASSEMBLE:
+    return format_string("fpchg");

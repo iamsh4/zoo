@@ -1,0 +1,6 @@
+include_rules
+
+: arm64_assembler.json |> ^ CODEGEN %o^ ./arm64.py %f %o |> %B.h $(NEEDS_CODEGEN)
+: arm64_assembler.json |> ^ CODEGEN %o^ ./arm64.py %f %o |> %B.cpp $(NEEDS_CODEGEN)
+
+: foreach *.cpp |> !cpp |> %B.o $(GROUP_LIBFOX)

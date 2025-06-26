@@ -1,0 +1,45 @@
+#
+# Global Configuration
+#
+
+# Allow nesting in a parent repository
+ifeq ($(SOURCE_ROOT),)
+SOURCE_ROOT := $(TUP_CWD)
+VARIANT_ROOT := $(TUP_VARIANTDIR)
+endif
+
+CFLAGS := -Wall
+CFLAGS += -std=c++17
+CFLAGS += -g
+CFLAGS += @(CFLAGS)
+CFLAGS += -I$(TUP_CWD)/include
+CFLAGS += -I$(TUP_VARIANTDIR)
+
+# TODO Fix-up on include paths
+CFLAGS += -I$(TUP_CWD)/..
+CFLAGS += -I$(TUP_VARIANTDIR)/..
+CFLAGS += -I$(TUP_CWD)
+
+LDFLAGS := -L$(VARIANT_ROOT)/lib
+LDFLAGS += @(LDFLAGS)
+LDFLAGS += -lfox
+
+# TODO Convert to std::format
+LDFLAGS += -lfmt
+
+#
+# Logical Groups
+#
+
+GROUP_LIBFOX = $(TUP_CWD)/<group_libfox>
+NEEDS_LIBFOX = $(TUP_CWD)/<needs_libfox>
+
+NEEDS_CODEGEN = $(TUP_CWD)/<needs_codegen>
+
+#
+# Build Macros
+#
+
+!cpp = | $(NEEDS_CODEGEN) |> ^ CXX %f^ g++ $(CFLAGS) -c %f -o %o |>
+!ld = | $(NEEDS_LIBFOX) |> ^ LD %B^ g++ $(LDFLAGS) %f -o %o |>
+!ar = |> ^ AR %o^ ar rc %o |>

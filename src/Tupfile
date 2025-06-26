@@ -1,0 +1,7 @@
+include_rules
+
+#
+# Generate Library
+#
+
+: | $(GROUP_ZOO) |> !ar %<group_zoo> |> $(SOURCE_ROOT)/lib/libzoo.a $(NEEDS_LIBZOO)

@@ -1,0 +1,6 @@
+include_rules
+
+LDFLAGS += -lgtest
+
+: foreach *.cpp |> !cpp |> %B.o {test_objs}
+: foreach {test_objs} | $(GROUP_LIBFOX) |> !ld |> $(VARIANT_ROOT)/%B

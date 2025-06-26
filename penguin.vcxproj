@@ -1,0 +1,299 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|Win32">
+      <Configuration>Debug</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|Win32">
+      <Configuration>Release</Configuration>
+      <Platform>Win32</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <VCProjectVersion>15.0</VCProjectVersion>
+    <ProjectGuid>{634A5634-D8DF-4E7C-AB87-DDE0A72780E8}</ProjectGuid>
+    <Keyword>Win32Proj</Keyword>
+    <RootNamespace>penguin</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0.15063.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <PlatformToolset>v141</PlatformToolset>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>Unicode</CharacterSet>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+  </ImportGroup>
+  <ImportGroup Label="Shared">
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)\build\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)\build\intermediate-files\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <OutDir>$(SolutionDir)\build\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)\build\intermediate-files\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)\build\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)\build\intermediate-files\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)\build\$(Platform)\$(Configuration)\</OutDir>
+    <IntDir>$(SolutionDir)\build\intermediate-files\$(Platform)\$(Configuration)\</IntDir>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\libraries\glew-2.0.0\include;C:\projects\penguin\third_party\SipHash;C:\projects\penguin\third_party\imgui;C:\libraries\SDL2\include;$(SolutionDir)/src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <DisableSpecificWarnings>4065;4244;4996;4201;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalOptions>/D NOMINMAX</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>SDL2.lib;SDL2main.lib;opengl32.lib;glew32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\libraries\glew-2.0.0;C:\libraries\SDL2;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <LargeAddressAware>true</LargeAddressAware>
+    </Link>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <WarningLevel>Level4</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\libraries\glew-2.0.0\include;C:\projects\penguin\third_party\SipHash;C:\projects\penguin\third_party\imgui;C:\libraries\SDL2\include;$(SolutionDir)/src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalOptions>/D NOMINMAX</AdditionalOptions>
+      <DisableSpecificWarnings>4065;4244;4996;4201;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>SDL2.lib;SDL2main.lib;opengl32.lib;glew32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\libraries\glew-2.0.0;C:\libraries\SDL2;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <LargeAddressAware>true</LargeAddressAware>
+    </Link>
+    <Manifest>
+      <EnableDpiAwareness>true</EnableDpiAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>MaxSpeed</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <DisableSpecificWarnings>4065;4244;4996;4201;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+      <AdditionalIncludeDirectories>C:\libraries\glew-2.0.0\include;C:\projects\penguin\third_party\SipHash;C:\projects\penguin\third_party\imgui;C:\libraries\SDL2\include;$(SolutionDir)/src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalOptions>/D NOMINMAX</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>SDL2.lib;SDL2main.lib;opengl32.lib;glew32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\libraries\glew-2.0.0;C:\libraries\SDL2;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <Profile>true</Profile>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <LargeAddressAware>true</LargeAddressAware>
+    </Link>
+    <Manifest>
+      <EnableDpiAwareness>true</EnableDpiAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level4</WarningLevel>
+      <PrecompiledHeader>
+      </PrecompiledHeader>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalIncludeDirectories>C:\libraries\glew-2.0.0\include;C:\projects\penguin\third_party\SipHash;C:\projects\penguin\third_party\imgui;C:\libraries\SDL2\include;$(SolutionDir)/src;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <WholeProgramOptimization>true</WholeProgramOptimization>
+      <InlineFunctionExpansion>AnySuitable</InlineFunctionExpansion>
+      <FavorSizeOrSpeed>Speed</FavorSizeOrSpeed>
+      <MultiProcessorCompilation>true</MultiProcessorCompilation>
+      <AdditionalOptions>/D NOMINMAX</AdditionalOptions>
+      <DisableSpecificWarnings>4065;4244;4996;4201;%(DisableSpecificWarnings)</DisableSpecificWarnings>
+    </ClCompile>
+    <Link>
+      <SubSystem>Console</SubSystem>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <AdditionalDependencies>SDL2.lib;SDL2main.lib;opengl32.lib;glew32.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>C:\libraries\glew-2.0.0;C:\libraries\SDL2;%(AdditionalLibraryDirectories)</AdditionalLibraryDirectories>
+      <Profile>true</Profile>
+      <RandomizedBaseAddress>false</RandomizedBaseAddress>
+      <LargeAddressAware>true</LargeAddressAware>
+    </Link>
+    <Manifest>
+      <EnableDpiAwareness>true</EnableDpiAwareness>
+    </Manifest>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="src\apu\aica.cpp" />
+    <ClCompile Include="src\apu\aica_rtc.cpp" />
+    <ClCompile Include="src\apu\arm7di.cpp" />
+    <ClCompile Include="src\apu\audio_sdl.cpp" />
+    <ClCompile Include="src\core\console.cpp" />
+    <ClCompile Include="src\core\core.cpp" />
+    <ClCompile Include="src\core\debugger.cpp" />
+    <ClCompile Include="src\core\memtable.cpp" />
+    <ClCompile Include="src\core\mmio_device.cpp" />
+    <ClCompile Include="src\core\placeholder_mmio.cpp" />
+    <ClCompile Include="src\core\system_bus_g1.cpp" />
+    <ClCompile Include="src\core\system_bus_g2.cpp" />
+    <ClCompile Include="src\core\system_bus_mmio.cpp" />
+    <ClCompile Include="src\cpu\cpu_debug.cpp" />
+    <ClCompile Include="src\cpu\jit.cpp" />
+    <ClCompile Include="src\cpu\jit_x64.cpp" />
+    <ClCompile Include="src\cpu\opcode.cpp" />
+    <ClCompile Include="src\cpu\sh4.cpp" />
+    <ClCompile Include="src\gpu\gpu_debug.cpp" />
+    <ClCompile Include="src\gpu\graphics_mmio.cpp" />
+    <ClCompile Include="src\gpu\powervr.cpp" />
+    <ClCompile Include="src\gpu\render_queue.cpp" />
+    <ClCompile Include="src\gpu\render_sdl.cpp" />
+    <ClCompile Include="src\gpu\texture_fifo.cpp" />
+    <ClCompile Include="src\gpu\texture_manager.cpp" />
+    <ClCompile Include="src\gpu\tile_accelerator.cpp" />
+    <ClCompile Include="src\gui\window_cpu.cpp" />
+    <ClCompile Include="src\gui\window_graphics.cpp" />
+    <ClCompile Include="src\gui\window_logger.cpp" />
+    <ClCompile Include="src\gui\window_memeditor.cpp" />
+    <ClCompile Include="src\jit\backend_x64.cpp" />
+    <ClCompile Include="src\peripherals\gdrom.cpp" />
+    <ClCompile Include="src\peripherals\gdrom_disc.cpp" />
+    <ClCompile Include="src\peripherals\maple.cpp" />
+    <ClCompile Include="src\peripherals\modem.cpp" />
+    <ClCompile Include="src\shared\async_fifo.cpp" />
+    <ClCompile Include="src\shared\log.cpp" />
+    <ClCompile Include="src\shared\print.cpp" />
+    <ClCompile Include="src\targets\penguin.cpp" />
+    <ClCompile Include="third_party\imgui\imgui.cpp" />
+    <ClCompile Include="third_party\imgui\imgui_draw.cpp" />
+    <ClCompile Include="third_party\imgui\imgui_impl.cpp" />
+    <ClCompile Include="third_party\SipHash\halfsiphash.c" />
+    <ClCompile Include="third_party\SipHash\siphash.c" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\apu\aica.h" />
+    <ClInclude Include="src\apu\aica_rtc.h" />
+    <ClInclude Include="src\apu\arm7di.h" />
+    <ClInclude Include="src\apu\audio_sdl.h" />
+    <ClInclude Include="src\core\console.h" />
+    <ClInclude Include="src\core\debugger.h" />
+    <ClInclude Include="src\core\memtable.h" />
+    <ClInclude Include="src\core\mmio_device.h" />
+    <ClInclude Include="src\core\placeholder_mmio.h" />
+    <ClInclude Include="src\core\register_state.h" />
+    <ClInclude Include="src\core\system_bus_g1.h" />
+    <ClInclude Include="src\core\system_bus_g2.h" />
+    <ClInclude Include="src\core\system_bus_mmio.h" />
+    <ClInclude Include="src\core\memory_region.h" />
+    <ClInclude Include="src\cpu\debug.h" />
+    <ClInclude Include="src\cpu\jit.h" />
+    <ClInclude Include="src\cpu\jit_x64.h" />
+    <ClInclude Include="src\cpu\opcode.h" />
+    <ClInclude Include="src\cpu\opcode_private.h" />
+    <ClInclude Include="src\cpu\sh4.h" />
+    <ClInclude Include="src\gpu\graphics_command.h" />
+    <ClInclude Include="src\gpu\graphics_mmio.h" />
+    <ClInclude Include="src\gpu\graphics_registers.h" />
+    <ClInclude Include="src\gpu\render_queue.h" />
+    <ClInclude Include="src\gpu\texture.h" />
+    <ClInclude Include="src\gpu\texture_fifo.h" />
+    <ClInclude Include="src\gpu\texture_manager.h" />
+    <ClInclude Include="src\gpu\powervr.h" />
+    <ClInclude Include="src\gpu\render_sdl.h" />
+    <ClInclude Include="src\gpu\ta_commands.h" />
+    <ClInclude Include="src\gpu\tile_accelerator.h" />
+    <ClInclude Include="src\gpu\tile_accelerator_registers.h" />
+    <ClInclude Include="src\gui\window.h" />
+    <ClInclude Include="src\gui\window_cpu.h" />
+    <ClInclude Include="src\gui\window_graphics.h" />
+    <ClInclude Include="src\gui\window_logger.h" />
+    <ClInclude Include="src\gui\window_memeditor.h" />
+    <ClInclude Include="src\jit\backend_x64.h" />
+    <ClInclude Include="src\jit\types.h" />
+    <ClInclude Include="src\peripherals\gdrom.h" />
+    <ClInclude Include="src\peripherals\gdrom_disc.h" />
+    <ClInclude Include="src\peripherals\maple.h" />
+    <ClInclude Include="src\peripherals\modem.h" />
+    <ClInclude Include="src\shared\ansi_color_constants.h" />
+    <ClInclude Include="src\shared\async_fifo.h" />
+    <ClInclude Include="src\shared\bitmanip.h" />
+    <ClInclude Include="src\shared\error.h" />
+    <ClInclude Include="src\shared\file_handle.h" />
+    <ClInclude Include="src\shared\log.h" />
+    <ClInclude Include="src\shared\parsing.h" />
+    <ClInclude Include="src\shared\print.h" />
+    <ClInclude Include="src\shared\register_definition.h" />
+    <ClInclude Include="src\shared\types.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+  </ImportGroup>
+</Project>

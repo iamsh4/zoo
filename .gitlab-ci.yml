@@ -1,0 +1,67 @@
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+image: "$CI_REGISTRY_IMAGE:latest"
+
+stages:
+  - setup
+  - build
+  - test
+
+setup:docker:
+  stage: setup
+  image:
+    name: gcr.io/kaniko-project/executor:debug
+    entrypoint: [""]
+  script:
+    - mkdir -p /kaniko/.docker
+    - echo "{\"auths\":{\"$CI_REGISTRY\":{\"username\":\"$CI_REGISTRY_USER\",\"password\":\"$CI_REGISTRY_PASSWORD\"}}}" > /kaniko/.docker/config.json
+    - /kaniko/executor --context $CI_PROJECT_DIR --dockerfile $CI_PROJECT_DIR/tools/Dockerfile --destination $CI_REGISTRY_IMAGE:latest
+  only:
+    changes:
+      - tools/Dockerfile
+
+pages:
+  stage: build
+  script:
+    - doxygen Doxyfile
+    - mv doc/html public
+  artifacts:
+    paths:
+      - public
+  only:
+    - master
+
+build:gcc:
+  stage: build
+  script:
+    - make -j8 third_party
+    - make all
+  artifacts:
+    paths:
+      - ./build-tup/test_amd64_compiler
+      - ./build-tup/test_utilities
+      - ./build-tup/test_arm64_logical_immediates
+      - ./build-tup/test_arm64_assembler
+      - ./build-tup/test_bytecode
+      - ./build-tup/test_r3000
+
+build:clang:
+  stage: build
+  script:
+    - export CC=clang
+    - export CXX=clang++
+    - make -j8 third_party
+    - make all
+
+test:units:
+  stage: test
+  dependencies:
+    - build:gcc
+  script:
+    - ./build-tup/test_amd64_compiler
+    - ./build-tup/test_utilities
+    - ./build-tup/test_arm64_logical_immediates
+    - ./build-tup/test_arm64_assembler
+    - ./build-tup/test_bytecode
+    - ./build-tup/test_r3000

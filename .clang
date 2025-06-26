@@ -1,0 +1,1 @@
+flags = -Isrc -Ithird_party/imgui -Ithird_party/SipHash

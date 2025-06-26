@@ -1,0 +1,23 @@
+include_rules
+
+# GUI support
+LDFLAGS += -L$(SOURCE_ROOT)/third_party/imgui
+LDFLAGS += -limgui
+
+# CHDR support
+LDFLAGS += -L$(SOURCE_ROOT)/third_party/libchdr
+LDFLAGS += -lchdr
+LDFLAGS += -lz
+LDFLAGS += -llzma
+
+LDFLAGS += -lgtest
+LDFLAGS += -lSDL2
+LDFLAGS += -lGLEW
+LDFLAGS += -lGL
+LDFLAGS += -lvulkan
+LDFLAGS += -ljsoncpp
+
+LDFLAGS += -lwgpu_native
+
+: foreach *.cpp |> !cpp |> %B.o {test_objs}
+: foreach {test_objs} | $(GROUP_LIBFOX) $(NEEDS_WEBGPU) |> !ld |> $(VARIANT_ROOT)/%B

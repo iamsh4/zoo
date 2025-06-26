@@ -1,0 +1,59 @@
+// vim: expandtab:ts=2:sw=2
+
+#include <string>
+#include <cstdio>
+#include <cstring>
+#include <cassert>
+#include <gtest/gtest.h>
+
+#include "fox/jit/cache.h"
+
+using namespace fox;
+
+class TestEntry : public jit::CacheEntry {
+public:
+  TestEntry(const u32 address) : CacheEntry(address, address, 100)
+  {
+    return;
+  }
+
+  ~TestEntry()
+  {
+    return;
+  }
+
+  bool compile()
+  {
+    return true;
+  }
+};
+
+TEST(JitCache, Invalidate)
+{
+  std::unique_ptr<MemoryTable> mem_table(new MemoryTable(0x100000u, 0x100000u));
+  std::unique_ptr<jit::Cache> cache(new jit::Cache(mem_table.get()));
+
+  ASSERT_EQ(nullptr, cache->lookup(0));
+
+  cache->insert(new TestEntry(0));
+  cache->insert(new TestEntry(90));
+
+  ASSERT_NE(nullptr, cache->lookup(0));
+
+  cache->queue_compile_unit(cache->lookup(0));
+  cache->memory_dirtied(95, 10);
+
+  ASSERT_NE(nullptr, cache->lookup(0));
+  ASSERT_EQ(true, cache->lookup(0)->is_invalidated());
+
+  cache->garbage_collect();
+
+  ASSERT_EQ(nullptr, cache->lookup(0));
+}
+
+int
+main(int argc, char *argv[])
+{
+  ::testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}

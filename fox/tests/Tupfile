@@ -1,0 +1,4 @@
+include_rules
+
+: foreach *.cpp |> !cpp |> %B.o {test_objs}
+: foreach {test_objs} | $(GROUP_LIBFOX) |> !ld -lfox -lgtest |> $(VARIANT_ROOT)/%B

@@ -1,0 +1,53 @@
+#
+# Global Configuration
+#
+
+CFLAGS := -Wall
+CFLAGS += -Werror
+CFLAGS += -Wno-error=unused-but-set-variable
+CFLAGS += -Wno-error=unused-variable
+CFLAGS += -Wno-error=unused-function
+CFLAGS += -Wno-ignored-attributes
+CFLAGS += -std=c++17
+CFLAGS += -g
+CFLAGS += @(CFLAGS)
+CFLAGS += -I$(TUP_CWD)
+
+# Fox include paths
+CFLAGS += -I$(SOURCE_ROOT)/fox/include
+# TODO Remove
+CFLAGS += -I$(SOURCE_ROOT)
+CFLAGS += -I$(SOURCE_ROOT)/fox
+CFLAGS += -I$(VARIANT_ROOT)
+CFLAGS += -I$(VARIANT_ROOT)/fox
+
+# Third party include paths
+CFLAGS += -I$(SOURCE_ROOT)/third_party/imgui
+CFLAGS += -I$(SOURCE_ROOT)/third_party/vma
+CFLAGS += -I$(SOURCE_ROOT)/third_party/libchdr/include
+CFLAGS += -I$(SOURCE_ROOT)/third_party/wgpu-native/ffi/webgpu-headers
+CFLAGS += -I$(SOURCE_ROOT)/third_party/wgpu-native/ffi
+
+LDFLAGS := -L$(VARIANT_ROOT)/lib
+LDFLAGS += -Wl,-rpath=\$(realpath $(VARIANT_ROOT)/lib)
+LDFLAGS += @(LDFLAGS)
+LDFLAGS += -lzoo
+LDFLAGS += -lfox
+
+# TODO Convert to std::format
+LDFLAGS += -lfmt
+
+#
+# Logical Groups
+#
+
+GROUP_ZOO = $(TUP_CWD)/<group_zoo>
+NEEDS_LIBZOO = $(TUP_CWD)/<needs_libzoo>
+
+#
+# Build Macros
+#
+
+!cpp = | $(NEEDS_CODEGEN) |> ^ CXX %f^ g++ $(CFLAGS) -c %f -o %o |>
+!ld = | $(NEEDS_LIBFOX) $(NEEDS_LIBZOO) |> ^ LD %B^ g++ %f $(LDFLAGS) -o %o |>
+!ar = |> ^ AR %o^ ar rc %o |>

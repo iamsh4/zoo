@@ -1,0 +1,10 @@
+include_rules
+
+# TODO Move all compilable sources to subdirectories
+: foreach *.cpp |> !cpp |> %B.o $(GROUP_LIBFOX)
+
+#
+# Generate Library
+#
+
+: | $(GROUP_LIBFOX) |> !ar %<group_libfox> |> $(SOURCE_ROOT)/lib/libfox.a $(NEEDS_LIBFOX)

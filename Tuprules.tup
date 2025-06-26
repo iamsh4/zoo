@@ -1,0 +1,14 @@
+#
+# Global Configuration
+#
+
+SOURCE_ROOT = $(TUP_CWD)
+VARIANT_ROOT = $(TUP_VARIANTDIR)
+
+#
+# Logical Groups
+#
+
+NEEDS_CODEGEN = $(TUP_CWD)/fox/<needs_libfox>
+NEEDS_LIBFOX = $(TUP_CWD)/fox/<needs_libfox>
+NEEDS_WEBGPU = $(TUP_CWD)/<needs_webgpu>

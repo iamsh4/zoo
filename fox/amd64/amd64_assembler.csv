@@ -1,0 +1,598 @@
+;; MOV
+;; mnemonic                       | opcode         | default size  | Notes
+mov reg/mem8, reg8                | 88 /r          | 8             |
+mov reg/mem16, reg16              | 89 /r          | 32            |
+mov reg/mem32, reg32              | 89 /r          | 32            |
+mov reg/mem64, reg64              | 89 /r          | 32            |
+mov reg8, reg/mem8                | 8A /r          | 8             |
+mov reg16, reg/mem16              | 8B /r          | 32            |
+mov reg32, reg/mem32              | 8B /r          | 32            |
+mov reg64, reg/mem64              | 8B /r          | 32            |
+mov al, moffset8                  | A0             | 8             |
+mov ax, moffset16                 | A1             | 32            |
+mov eax, moffset32                | A1             | 32            |
+mov rax, moffset64                | A1             | 32            |
+mov moffset8, al                  | A2             | 8             |
+mov moffset16, ax                 | A3             | 32            |
+mov moffset32, eax                | A3             | 32            |
+mov moffset64, rax                | A3             | 32            |
+mov reg8, imm8                    | B0 +rb ib      | 8             |
+mov reg16, imm16                  | B8 +rw iw      | 32            |
+mov reg32, imm32                  | B8 +rd id      | 32            |
+mov reg64, imm64                  | B8 +rq iq      | 32            |
+mov reg/mem8, imm8                | C6 /0 ib       | 8             |
+mov reg/mem16, imm16              | C7 /0 iw       | 32            |
+mov reg/mem32, imm32              | C7 /0 id       | 32            |
+mov reg/mem64, imm32s             | C7 /0 id       | 32            |
+
+;; MOVSX
+;; mnemonic                       | opcode         | default size  | Notes
+movsx reg16, reg/mem8             | 0F BE /r       | 32            |
+movsx reg32, reg/mem8             | 0F BE /r       | 32            |
+movsx reg64, reg/mem8             | 0F BE /r       | 32            |
+movsx reg32, reg/mem16            | 0F BF /r       | 32            |
+movsx reg64, reg/mem16            | 0F BF /r       | 32            |
+
+;; MOVZX
+;; mnemonic                       | opcode         | default size  | Notes
+movzx reg16, reg/mem8             | 0F B6 /r       | 32            |
+movzx reg32, reg/mem8             | 0F B6 /r       | 32            |
+movzx reg64, reg/mem8             | 0F B6 /r       | 32            |
+movzx reg32, reg/mem16            | 0F B7 /r       | 32            |
+movzx reg64, reg/mem16            | 0F B7 /r       | 32            |
+
+;; MUL
+;; mnemonic                       | opcode         | default size  | Notes
+mul reg/mem8                      | F6 /4          | 8             |
+mul reg/mem16                     | F7 /4          | 32            |
+mul reg/mem32                     | F7 /4          | 32            |
+mul reg/mem64                     | F7 /4          | 32            |
+
+;; IMUL
+;; mnemonic                       | opcode         | default size  | Notes
+imul reg/mem8                     | F6 /5          | 8             |
+imul reg/mem16                    | F7 /5          | 32            |
+imul reg/mem32                    | F7 /5          | 32            |
+imul reg/mem64                    | F7 /5          | 32            |
+imul reg16, reg/mem16             | 0F AF /r       | 32            |
+imul reg32, reg/mem32             | 0F AF /r       | 32            |
+imul reg64, reg/mem64             | 0F AF /r       | 32            |
+imul reg16, reg/mem16, imm8       | 6B /r ib       | 32            |
+imul reg32, reg/mem32, imm8       | 6B /r ib       | 32            |
+imul reg64, reg/mem64, imm8       | 6B /r ib       | 32            |
+imul reg16, reg/mem16, imm16      | 69 /r iw       | 32            |
+imul reg32, reg/mem32, imm32      | 69 /r id       | 32            |
+imul reg32, reg/mem32, imm32s     | 69 /r id       | 32            |
+
+;; NOP
+;; mnemonic                       | opcode         | default size  | Notes
+nop1                              | 90             | 0             | 1-byte NOP
+
+;; NOT
+;; mnemonic                       | opcode         | default size  | Notes
+not reg/mem8                      | F6 /2          | 8             |
+not reg/mem16                     | F7 /2          | 32            |
+not reg/mem32                     | F7 /2          | 32            |
+not reg/mem64                     | F7 /2          | 32            |
+
+;; ROL
+;; mnemonic                       | opcode         | default size  | Notes
+rol1 reg/mem8                     | D0 /0          | 8             |
+rol  reg/mem8, cl                 | D2 /0          | 8             |
+rol  reg/mem8, imm8               | C0 /0 ib       | 8             |
+rol1 reg/mem16                    | D1 /0          | 32            |
+rol  reg/mem16, cl                | D3 /0          | 32            |
+rol  reg/mem16, imm8              | C1 /0 ib       | 32            |
+rol1 reg/mem32                    | D1 /0          | 32            |
+rol  reg/mem32, cl                | D3 /0          | 32            |
+rol  reg/mem32, imm8              | C1 /0 ib       | 32            |
+rol1 reg/mem64                    | D1 /0          | 32            |
+rol  reg/mem64, cl                | D3 /0          | 32            |
+rol  reg/mem64, imm8              | C1 /0 ib       | 32            |
+
+;; ROR
+;; mnemonic                       | opcode         | default size  | Notes
+ror1 reg/mem8                     | D0 /1          | 8             |
+ror  reg/mem8, cl                 | D2 /1          | 8             |
+ror  reg/mem8, imm8               | C0 /1 ib       | 8             |
+ror1 reg/mem16                    | D1 /1          | 32            |
+ror  reg/mem16, cl                | D3 /1          | 32            |
+ror  reg/mem16, imm8              | C1 /1 ib       | 32            |
+ror1 reg/mem32                    | D1 /1          | 32            |
+ror  reg/mem32, cl                | D3 /1          | 32            |
+ror  reg/mem32, imm8              | C1 /1 ib       | 32            |
+ror1 reg/mem64                    | D1 /1          | 32            |
+ror  reg/mem64, cl                | D3 /1          | 32            |
+ror  reg/mem64, imm8              | C1 /1 ib       | 32            |
+
+;; SHL
+;; mnemonic                       | opcode         | default size  | Notes
+;shl reg/mem8, 1                   | D0 /4          | 8             |
+shl reg/mem8, cl                  | D2 /4          | 8             |
+shl reg/mem8, imm8                | C0 /4 ib       | 8             |
+;shl reg/mem16, 1                  | D1 /4          | 32            |
+shl reg/mem16, cl                 | D3 /4          | 32            |
+shl reg/mem16, imm8               | C1 /4 ib       | 32            |
+;shl reg/mem32, 1                  | D1 /4          | 32            |
+shl reg/mem32, cl                 | D3 /4          | 32            |
+shl reg/mem32, imm8               | C1 /4 ib       | 32            |
+;shl reg/mem64, 1                  | D1 /4          | 32            |
+shl reg/mem64, cl                 | D3 /4          | 32            |
+shl reg/mem64, imm8               | C1 /4 ib       | 32            |
+
+;; SHR
+;; mnemonic                       | opcode         | default size  | Notes
+;shr reg/mem8, 1                   | D0 /5          | 8             |
+shr reg/mem8, cl                  | D2 /5          | 8             |
+shr reg/mem8, imm8                | C0 /5 ib       | 8             |
+;shr reg/mem16, 1                  | D1 /5          | 32            |
+shr reg/mem16, cl                 | D3 /5          | 32            |
+shr reg/mem16, imm8               | C1 /5 ib       | 32            |
+;shr reg/mem32, 1                  | D1 /5          | 32            |
+shr reg/mem32, cl                 | D3 /5          | 32            |
+shr reg/mem32, imm8               | C1 /5 ib       | 32            |
+;shr reg/mem64, 1                  | D1 /5          | 32            |
+shr reg/mem64, cl                 | D3 /5          | 32            |
+shr reg/mem64, imm8               | C1 /5 ib       | 32            |
+
+;; SAR
+;; mnemonic                       | opcode         | default size  | Notes
+;sar reg/mem8, 1                   | D0 /7          | 8             |
+sar reg/mem8, cl                  | D2 /7          | 8             |
+sar reg/mem8, imm8                | C0 /7 ib       | 8             |
+;sar reg/mem16, 1                  | D1 /7          | 32            |
+sar reg/mem16, cl                 | D3 /7          | 32            |
+sar reg/mem16, imm8               | C1 /7 ib       | 32            |
+;sar reg/mem32, 1                  | D1 /7          | 32            |
+sar reg/mem32, cl                 | D3 /7          | 32            |
+sar reg/mem32, imm8               | C1 /7 ib       | 32            |
+;sar reg/mem64, 1                  | D1 /7          | 32            |
+sar reg/mem64, cl                 | D3 /7          | 32            |
+sar reg/mem64, imm8               | C1 /7 ib       | 32            |
+
+;; LEA
+;; mnemonic                       | opcode         | default size  | Notes
+lea reg16, reg/mem8               | 8D /r          | 32            | Source cannot be a register
+lea reg32, reg/mem8               | 8D /r          | 32            | Source cannot be a register
+lea reg64, reg/mem8               | 8D /r          | 32            | Source cannot be a register
+
+;; PUSH
+;; mnemonic                       | opcode         | default size  | Notes
+push reg/mem16                    | FF /6          | 32            |
+push reg/mem64                    | FF /6          | 64            |
+push reg16                        | 50 +rw         | 32            |
+push reg64                        | 50 +rq         | 64            |
+push imm8s                        | 6A ib          | 32            |
+push imm16                        | 68 iw          | 32            |
+push imm32                        | 68 id          | 32            |
+;push imm32s                       | 68 id          | 32            | Broken
+
+;; POP
+;; mnemonic                       | opcode         | default size  | Notes
+pop reg/mem16                     | 8F /0          | 32            |
+pop reg/mem64                     | 8F /0          | 64            |
+pop reg16                         | 58 +rw         | 32            |
+pop reg64                         | 58 +rq         | 64            |
+
+;; ADD
+;; mnemonic                       | opcode         | default size  | Notes
+add al, imm8                      | 04 ib          | 8             |
+add ax, imm16                     | 05 iw          | 32            |
+add eax, imm32                    | 05 id          | 32            |
+add rax, imm32s                   | 05 id          | 32            |
+add reg/mem8, imm8                | 80 /0 ib       | 8             |
+add reg/mem16, imm16              | 81 /0 iw       | 32            |
+add reg/mem32, imm32              | 81 /0 id       | 32            |
+add reg/mem64, imm32s             | 81 /0 id       | 32            |
+add reg/mem16, imm8s              | 83 /0 ib       | 32            |
+add reg/mem32, imm8s              | 83 /0 ib       | 32            |
+add reg/mem64, imm8s              | 83 /0 ib       | 32            |
+add reg/mem8, reg8                | 00 /r          | 8             |
+add reg/mem16, reg16              | 01 /r          | 32            |
+add reg/mem32, reg32              | 01 /r          | 32            |
+add reg/mem64, reg64              | 01 /r          | 32            |
+add reg8, reg/mem8                | 02 /r          | 8             |
+add reg16, reg/mem16              | 03 /r          | 32            |
+add reg32, reg/mem32              | 03 /r          | 32            |
+add reg64, reg/mem64              | 03 /r          | 32            |
+
+;; SUB
+;; mnemonic                       | opcode         | default size  | Notes
+sub al, imm8                      | 2C ib          | 8             |
+sub ax, imm16                     | 2D iw          | 32            |
+sub eax, imm32                    | 2D id          | 32            |
+sub rax, imm32s                   | 2D id          | 32            |
+sub reg/mem8, imm8                | 80 /5 ib       | 8             |
+sub reg/mem16, imm16              | 81 /5 iw       | 32            |
+sub reg/mem32, imm32              | 81 /5 id       | 32            |
+sub reg/mem64, imm32s             | 81 /5 id       | 32            |
+sub reg/mem16, imm8               | 83 /5 ib       | 32            |
+sub reg/mem32, imm8               | 83 /5 ib       | 32            |
+sub reg/mem64, imm8               | 83 /5 ib       | 32            |
+sub reg/mem8, reg8                | 28 /r          | 8             |
+sub reg/mem16, reg16              | 29 /r          | 32            |
+sub reg/mem32, reg32              | 29 /r          | 32            |
+sub reg/mem64, reg64              | 29 /r          | 32            |
+sub reg8, reg/mem8                | 2A /r          | 8             |
+sub reg16, reg/mem16              | 2B /r          | 32            |
+sub reg32, reg/mem32              | 2B /r          | 32            |
+sub reg64, reg/mem64              | 2B /r          | 32            |
+
+;; AND
+;; mnemonic                       | opcode         | default size  | Notes
+and al, imm8                      | 24 ib          | 8             |
+and ax, imm16                     | 25 iw          | 32            |
+and eax, imm32                    | 25 id          | 32            |
+and rax, imm32s                   | 25 id          | 32            |
+and reg/mem8, imm8                | 80 /4 ib       | 8             |
+and reg/mem16, imm16              | 81 /4 iw       | 32            |
+and reg/mem32, imm32              | 81 /4 id       | 32            |
+and reg/mem64, imm32s             | 81 /4 id       | 32            |
+and reg/mem16, imm8s              | 83 /4 ib       | 32            |
+and reg/mem32, imm8s              | 83 /4 ib       | 32            |
+and reg/mem64, imm8s              | 83 /4 ib       | 32            |
+and reg/mem8, reg8                | 20 /r          | 8             |
+and reg/mem16, reg16              | 21 /r          | 32            |
+and reg/mem32, reg32              | 21 /r          | 32            |
+and reg/mem64, reg64              | 21 /r          | 32            |
+and reg8, reg/mem8                | 22 /r          | 8             |
+and reg16, reg/mem16              | 23 /r          | 32            |
+and reg32, reg/mem32              | 23 /r          | 32            |
+and reg64, reg/mem64              | 23 /r          | 32            |
+
+;; OR
+;; mnemonic                       | opcode         | default size  | Notes
+or al, imm8                       | 0C ib          | 8             |
+or ax, imm16                      | 0D iw          | 32            |
+or eax, imm32                     | 0D id          | 32            |
+or rax, imm32s                    | 0D id          | 32            |
+or reg/mem8, imm8                 | 80 /1 ib       | 8             |
+or reg/mem16, imm16               | 81 /1 iw       | 32            |
+or reg/mem32, imm32               | 81 /1 id       | 32            |
+or reg/mem64, imm32s              | 81 /1 id       | 32            |
+or reg/mem16, imm8                | 83 /1 ib       | 32            |
+or reg/mem32, imm8                | 83 /1 ib       | 32            |
+or reg/mem64, imm8                | 83 /1 ib       | 32            |
+or reg/mem8, reg8                 | 08 /r          | 8             |
+or reg/mem16, reg16               | 09 /r          | 32            |
+or reg/mem32, reg32               | 09 /r          | 32            |
+or reg/mem64, reg64               | 09 /r          | 32            |
+or reg8, reg/mem8                 | 0A /r          | 8             |
+or reg16, reg/mem16               | 0B /r          | 32            |
+or reg32, reg/mem32               | 0B /r          | 32            |
+or reg64, reg/mem64               | 0B /r          | 32            |
+
+;; XOR
+;; mnemonic                       | opcode         | default size  | Notes
+xor al, imm8                      | 34 ib          | 8             |
+xor ax, imm16                     | 35 iw          | 32            |
+xor eax, imm32                    | 35 id          | 32            |
+xor rax, imm32s                   | 35 id          | 32            |
+xor reg/mem8, imm8                | 80 /6 ib       | 8             |
+xor reg/mem16, imm16              | 81 /6 iw       | 32            |
+xor reg/mem32, imm32              | 81 /6 id       | 32            |
+xor reg/mem64, imm32s             | 81 /6 id       | 32            |
+xor reg/mem16, imm8               | 83 /6 ib       | 32            |
+xor reg/mem32, imm8               | 83 /6 ib       | 32            |
+xor reg/mem64, imm8               | 83 /6 ib       | 32            |
+xor reg/mem8, reg8                | 30 /r          | 8             |
+xor reg/mem16, reg16              | 31 /r          | 32            |
+xor reg/mem32, reg32              | 31 /r          | 32            |
+xor reg/mem64, reg64              | 31 /r          | 32            |
+xor reg8, reg/mem8                | 32 /r          | 8             |
+xor reg16, reg/mem16              | 33 /r          | 32            |
+xor reg32, reg/mem32              | 33 /r          | 32            |
+xor reg64, reg/mem64              | 33 /r          | 32            |
+
+;; TEST
+;; mnemonic                       | opcode         | default size  | Notes
+test al, imm8                     | A8 ib          | 8             |
+test ax, imm16                    | A9 iw          | 32            |
+test eax, imm32                   | A9 id          | 32            |
+test rax, imm32s                  | A9 id          | 32            |
+test reg/mem8, imm8               | F6 /0 ib       | 8             |
+test reg/mem16, imm16             | F7 /0 iw       | 32            |
+test reg/mem32, imm32             | F7 /0 id       | 32            |
+test reg/mem64, imm32s            | F7 /0 id       | 32            |
+test reg/mem8, reg8               | 84 /r          | 8             |
+test reg/mem16, reg16             | 85 /r          | 32            |
+test reg/mem32, reg32             | 85 /r          | 32            |
+test reg/mem64, reg64             | 85 /r          | 32            |
+test reg8, reg/mem8               | 84 /r          | 8             | Reverse version, since argument order doesn't matter
+test reg16, reg/mem16             | 85 /r          | 32            | Reverse version, since argument order doesn't matter
+test reg32, reg/mem32             | 85 /r          | 32            | Reverse version, since argument order doesn't matter
+test reg64, reg/mem64             | 85 /r          | 32            | Reverse version, since argument order doesn't matter
+
+;; CMP
+;; mnemonic                       | opcode         | default size  | Notes
+cmp al, imm8                      | 3C ib          | 8             |
+cmp ax, imm16                     | 3D iw          | 32            |
+cmp eax, imm32                    | 3D id          | 32            |
+cmp rax, imm32s                   | 3D id          | 32            |
+cmp reg/mem8, imm8                | 80 /7 ib       | 8             |
+cmp reg/mem16, imm16              | 81 /7 iw       | 32            |
+cmp reg/mem32, imm32              | 81 /7 id       | 32            |
+cmp reg/mem64, imm32s             | 81 /7 id       | 32            |
+cmp reg/mem16, imm8s              | 83 /7 ib       | 32            |
+cmp reg/mem32, imm8s              | 83 /7 ib       | 32            |
+cmp reg/mem64, imm8s              | 83 /7 ib       | 32            |
+cmp reg/mem8, reg8                | 38 /r          | 8             |
+cmp reg/mem16, reg16              | 39 /r          | 32            |
+cmp reg/mem32, reg32              | 39 /r          | 32            |
+cmp reg/mem64, reg64              | 39 /r          | 32            |
+cmp reg8, reg/mem8                | 3A /r          | 8             |
+cmp reg16, reg/mem16              | 3B /r          | 32            |
+cmp reg32, reg/mem32              | 3B /r          | 32            |
+cmp reg64, reg/mem64              | 3B /r          | 32            |
+
+;; CMOV
+;; mnemonic                       | opcode         | default size  | Notes
+cmovo reg16, reg/mem16            | 0F 40 /r       | 32            |
+cmovo reg32, reg/mem32            | 0F 40 /r       | 32            |
+cmovo reg64, reg/mem64            | 0F 40 /r       | 32            |
+cmovno reg16, reg/mem16           | 0F 41 /r       | 32            |
+cmovno reg32, reg/mem32           | 0F 41 /r       | 32            |
+cmovno reg64, reg/mem64           | 0F 41 /r       | 32            |
+cmovb reg16, reg/mem16            | 0F 42 /r       | 32            |
+cmovb reg32, reg/mem32            | 0F 42 /r       | 32            |
+cmovb reg64, reg/mem64            | 0F 42 /r       | 32            |
+cmovc reg16, reg/mem16            | 0F 42 /r       | 32            |
+cmovc reg32, reg/mem32            | 0F 42 /r       | 32            |
+cmovc reg64, reg/mem64            | 0F 42 /r       | 32            |
+cmovnae reg16, reg/mem16          | 0F 42 /r       | 32            |
+cmovnae reg32, reg/mem32          | 0F 42 /r       | 32            |
+cmovnae reg64, reg/mem64          | 0F 42 /r       | 32            |
+cmovnb reg16, reg/mem16           | 0F 43 /r       | 32            |
+cmovnb reg32, reg/mem32           | 0F 43 /r       | 32            |
+cmovnb reg64, reg/mem64           | 0F 43 /r       | 32            |
+cmovnc reg16, reg/mem16           | 0F 43 /r       | 32            |
+cmovnc reg32, reg/mem32           | 0F 43 /r       | 32            |
+cmovnc reg64, reg/mem64           | 0F 43 /r       | 32            |
+cmovae reg16, reg/mem16           | 0F 43 /r       | 32            |
+cmovae reg32, reg/mem32           | 0F 43 /r       | 32            |
+cmovae reg64, reg/mem64           | 0F 43 /r       | 32            |
+cmovz reg16, reg/mem16            | 0F 44 /r       | 32            |
+cmovz reg32, reg/mem32            | 0F 44 /r       | 32            |
+cmovz reg64, reg/mem64            | 0F 44 /r       | 32            |
+cmove reg16, reg/mem16            | 0F 44 /r       | 32            |
+cmove reg32, reg/mem32            | 0F 44 /r       | 32            |
+cmove reg64, reg/mem64            | 0F 44 /r       | 32            |
+cmovnz reg16, reg/mem16           | 0F 45 /r       | 32            |
+cmovnz reg32, reg/mem32           | 0F 45 /r       | 32            |
+cmovnz reg64, reg/mem64           | 0F 45 /r       | 32            |
+cmovne reg16, reg/mem16           | 0F 45 /r       | 32            |
+cmovne reg32, reg/mem32           | 0F 45 /r       | 32            |
+cmovne reg64, reg/mem64           | 0F 45 /r       | 32            |
+cmovbe reg16, reg/mem16           | 0F 46 /r       | 32            |
+cmovbe reg32, reg/mem32           | 0F 46 /r       | 32            |
+cmovbe reg64, reg/mem64           | 0F 46 /r       | 32            |
+cmovna reg16, reg/mem16           | 0F 46 /r       | 32            |
+cmovna reg32, reg/mem32           | 0F 46 /r       | 32            |
+cmovna reg64, reg/mem64           | 0F 46 /r       | 32            |
+cmovnbe reg16, reg/mem16          | 0F 47 /r       | 32            |
+cmovnbe reg32, reg/mem32          | 0F 47 /r       | 32            |
+cmovnbe reg64, reg/mem64          | 0F 47 /r       | 32            |
+cmova reg16, reg/mem16            | 0F 47 /r       | 32            |
+cmova reg32, reg/mem32            | 0F 47 /r       | 32            |
+cmova reg64, reg/mem64            | 0F 47 /r       | 32            |
+cmovs reg16, reg/mem16            | 0F 48 /r       | 32            |
+cmovs reg32, reg/mem32            | 0F 48 /r       | 32            |
+cmovs reg64, reg/mem64            | 0F 48 /r       | 32            |
+cmovns reg16, reg/mem16           | 0F 49 /r       | 32            |
+cmovns reg32, reg/mem32           | 0F 49 /r       | 32            |
+cmovns reg64, reg/mem64           | 0F 49 /r       | 32            |
+cmovp reg16, reg/mem16            | 0F 4A /r       | 32            |
+cmovp reg32, reg/mem32            | 0F 4A /r       | 32            |
+cmovp reg64, reg/mem64            | 0F 4A /r       | 32            |
+cmovpe reg16, reg/mem16           | 0F 4A /r       | 32            |
+cmovpe reg32, reg/mem32           | 0F 4A /r       | 32            |
+cmovpe reg64, reg/mem64           | 0F 4A /r       | 32            |
+cmovnp reg16, reg/mem16           | 0F 4B /r       | 32            |
+cmovnp reg32, reg/mem32           | 0F 4B /r       | 32            |
+cmovnp reg64, reg/mem64           | 0F 4B /r       | 32            |
+cmovpo reg16, reg/mem16           | 0F 4B /r       | 32            |
+cmovpo reg32, reg/mem32           | 0F 4B /r       | 32            |
+cmovpo reg64, reg/mem64           | 0F 4B /r       | 32            |
+cmovl reg16, reg/mem16            | 0F 4C /r       | 32            |
+cmovl reg32, reg/mem32            | 0F 4C /r       | 32            |
+cmovl reg64, reg/mem64            | 0F 4C /r       | 32            |
+cmovnge reg16, reg/mem16          | 0F 4C /r       | 32            |
+cmovnge reg32, reg/mem32          | 0F 4C /r       | 32            |
+cmovnge reg64, reg/mem64          | 0F 4C /r       | 32            |
+cmovnl reg16, reg/mem16           | 0F 4D /r       | 32            |
+cmovnl reg32, reg/mem32           | 0F 4D /r       | 32            |
+cmovnl reg64, reg/mem64           | 0F 4D /r       | 32            |
+cmovge reg16, reg/mem16           | 0F 4D /r       | 32            |
+cmovge reg32, reg/mem32           | 0F 4D /r       | 32            |
+cmovge reg64, reg/mem64           | 0F 4D /r       | 32            |
+cmovle reg16, reg/mem16           | 0F 4E /r       | 32            |
+cmovle reg32, reg/mem32           | 0F 4E /r       | 32            |
+cmovle reg64, reg/mem64           | 0F 4E /r       | 32            |
+cmovng reg16, reg/mem16           | 0F 4E /r       | 32            |
+cmovng reg32, reg/mem32           | 0F 4E /r       | 32            |
+cmovng reg64, reg/mem64           | 0F 4E /r       | 32            |
+cmovnle reg16, reg/mem16          | 0F 4F /r       | 32            |
+cmovnle reg32, reg/mem32          | 0F 4F /r       | 32            |
+cmovnle reg64, reg/mem64          | 0F 4F /r       | 32            |
+cmovg reg16, reg/mem16            | 0F 4F /r       | 32            |
+cmovg reg32, reg/mem32            | 0F 4F /r       | 32            |
+cmovg reg64, reg/mem64            | 0F 4F /r       | 32            |
+
+;; RET
+;; mnemonic                       | opcode         | default size  | Notes
+ret                               | C3             | 0             | (Near)
+ret imm16                         | C2 iw          | 0             | (Near)
+
+;; CALL
+;; mnemonic                       | opcode         | default size  | Notes
+call rel32off                     | E8 id          | 32            |
+call reg/mem64                    | FF /2          | 64            |
+
+
+;; Jcc
+;; mnemonic                       | opcode         | default size  | Notes
+jo rel8off                        | 70 cb          | 8             |
+jo rel32off                       | 0F 80 cd       | 32            |
+jno rel8off                       | 71 cb          | 8             |
+jno rel32off                      | 0F 81 cd       | 32            |
+jb rel8off                        | 72 cb          | 8             |
+jb rel32off                       | 0F 82 cd       | 32            |
+jc rel8off                        | 72 cb          | 8             |
+jc rel32off                       | 0F 82 cd       | 32            |
+jnae rel8off                      | 72 cb          | 8             |
+jnae rel32off                     | 0F 82 cd       | 32            |
+jnb rel8off                       | 73 cb          | 8             |
+jnb rel32off                      | 0F 83 cd       | 32            |
+jnc rel8off                       | 73 cb          | 8             |
+jnc rel32off                      | 0F 83 cd       | 32            |
+jae rel8off                       | 73 cb          | 8             |
+jae rel32off                      | 0F 83 cd       | 32            |
+jz rel8off                        | 74 cb          | 8             |
+jz rel32off                       | 0F 84 cd       | 32            |
+je rel8off                        | 74 cb          | 3             |
+je rel32off                       | 0F 84 cd       | 32            |
+jnz rel8off                       | 75 cb          | 8             |
+jnz rel32off                      | 0F 85 cd       | 32            |
+jne rel8off                       | 75 cb          | 8             |
+jne rel32off                      | 0F 85 cd       | 32            |
+jbe rel8off                       | 76 cb          | 8             |
+jbe rel32off                      | 0F 86 cd       | 32            |
+jna rel8off                       | 76 cb          | 8             |
+jna rel32off                      | 0F 86 cd       | 32            |
+jnbe rel8off                      | 77 cb          | 8             |
+jnbe rel32off                     | 0F 87 cd       | 32            |
+ja rel8off                        | 77 cb          | 8             |
+ja rel32off                       | 0F 87 cd       | 32            |
+js rel8off                        | 78 cb          | 8             |
+js rel32off                       | 0F 88 cd       | 32            |
+jns rel8off                       | 79 cb          | 8             |
+jns rel32off                      | 0F 89 cd       | 32            |
+jp rel8off                        | 7A cb          | 8             |
+jp rel32off                       | 0F 8A cd       | 32            |
+jpe rel8off                       | 7A cb          | 8             |
+jpe rel32off                      | 0F 8A cd       | 32            |
+jnp rel8off                       | 7B cb          | 8             |
+jnp rel32off                      | 0F 8B cd       | 32            |
+jpo rel8off                       | 7B cb          | 8             |
+jpo rel32off                      | 0F 8B cd       | 32            |
+jl rel8off                        | 7C cb          | 8             |
+jl rel32off                       | 0F 8C cd       | 32            |
+jnge rel8off                      | 7C cb          | 8             |
+jnge rel32off                     | 0F 8C cd       | 32            |
+jnl rel8off                       | 7D cb          | 8             |
+jnl rel32off                      | 0F 8D cd       | 32            |
+jge rel8off                       | 7D cb          | 8             |
+jge rel32off                      | 0F 8D cd       | 32            |
+jle rel8off                       | 7E cb          | 8             |
+jle rel32off                      | 0F 8E cd       | 32            |
+jng rel8off                       | 7E cb          | 8             |
+jng rel32off                      | 0F 8E cd       | 32            |
+jnle rel8off                      | 7F cb          | 8             |
+jnle rel32off                     | 0F 8F cd       | 32            |
+jg rel8off                        | 7F cb          | 8             |
+jg rel32off                       | 0F 8F cd       | 32            |
+
+;; JMP (Near)
+;; mnemonic                       | opcode         | default size  | Notes
+jmp rel8off                       | EB cb          | 8             |
+jmp rel32off                      | E9 cd          | 32            |
+
+;; SETcc
+;; mnemonic                       | opcode         | default size  | Notes
+seto reg/mem8                     | 0F 90 /0       | 8             |
+setno reg/mem8                    | 0F 91 /0       | 8             |
+setb reg/mem8                     | 0F 92 /0       | 8             |
+setc reg/mem8                     | 0F 92 /0       | 8             |
+setnae reg/mem8                   | 0F 92 /0       | 8             |
+setnb reg/mem8                    | 0F 93 /0       | 8             |
+setnc reg/mem8                    | 0F 93 /0       | 8             |
+setae reg/mem8                    | 0F 93 /0       | 8             |
+setz reg/mem8                     | 0F 94 /0       | 8             |
+sete reg/mem8                     | 0F 94 /0       | 8             |
+setnz reg/mem8                    | 0F 95 /0       | 8             |
+setne reg/mem8                    | 0F 95 /0       | 8             |
+setbe reg/mem8                    | 0F 96 /0       | 8             |
+setna reg/mem8                    | 0F 96 /0       | 8             |
+setnbe reg/mem8                   | 0F 97 /0       | 8             |
+seta reg/mem8                     | 0F 97 /0       | 8             |
+sets reg/mem8                     | 0F 98 /0       | 8             |
+setns reg/mem8                    | 0F 99 /0       | 8             |
+setp reg/mem8                     | 0F 9A /0       | 8             |
+setpe reg/mem8                    | 0F 9A /0       | 8             |
+setnp reg/mem8                    | 0F 9B /0       | 8             |
+setpo reg/mem8                    | 0F 9B /0       | 8             |
+setl reg/mem8                     | 0F 9C /0       | 8             |
+setnge reg/mem8                   | 0F 9C /0       | 8             |
+setnl reg/mem8                    | 0F 9D /0       | 8             |
+setge reg/mem8                    | 0F 9D /0       | 8             |
+setle reg/mem8                    | 0F 9E /0       | 8             |
+setng reg/mem8                    | 0F 9E /0       | 8             |
+setnle reg/mem8                   | 0F 9F /0       | 8             |
+setg reg/mem8                     | 0F 9F /0       | 8             |
+
+;; MOV (SSE)
+;; mnemonic                       | opcode         | default size  | Notes
+movapd xmm128, xmm/mem128         | 66 0F 28 /r    | 128           |
+movapd xmm/mem128, xmm128         | 66 0F 29 /r    | 128           |
+movaps xmm128, xmm/mem128         | 0F 28 /r       | 128           |
+movaps xmm/mem128, xmm128         | 0F 29 /r       | 128           |
+movupd xmm128, xmm/mem128         | 66 0F 10 /r    | 128           |
+movupd xmm/mem128, xmm128         | 66 0F 11 /r    | 128           |
+movups xmm128, xmm/mem128         | 0F 10 /r       | 128           |
+movups xmm/mem128, xmm128         | 0F 11 /r       | 128           |
+movd xmm32, reg/mem32             | 66 0F 6E /r    | 32            |
+movd xmm64, reg/mem64             | 66 0F 6E /r    | 32            |
+movd reg/mem32, xmm32             | 66 0F 7E /r    | 32            |
+movd reg/mem64, xmm64             | 66 0F 7E /r    | 32            |
+
+;; ADD (SSE)
+;; mnemonic                       | opcode         | default size  | Notes
+addpd xmm128, xmm/mem128          | 66 0F 58 /r    | 128           |
+addps xmm128, xmm/mem128          | 0F 58 /r       | 128           |
+addsd xmm64, xmm/mem64            | F2 0F 58 /r    | 64            |
+addss xmm32, xmm/mem32            | F3 0F 58 /r    | 32            |
+
+;; DIV (SSE)
+;; mnemonic                       | opcode         | default size  | Notes
+divpd xmm128, xmm/mem128          | 66 0F 5E /r    | 128           |
+divps xmm128, xmm/mem128          | 0F 5E /r       | 128           |
+divsd xmm64, xmm/mem64            | F2 0F 5E /r    | 64            |
+divss xmm32, xmm/mem32            | F3 0F 5E /r    | 32            |
+
+;; MUL (SSE)
+;; mnemonic                       | opcode         | default size  | Notes
+mulpd xmm128, xmm/mem128          | 66 0F 59 /r    | 128           |
+mulps xmm128, xmm/mem128          | 0F 59 /r       | 128           |
+mulsd xmm64, xmm/mem64            | F2 0F 59 /r    | 64            |
+mulss xmm32, xmm/mem32            | F3 0F 59 /r    | 32            |
+
+;; SUB (SSE)
+;; mnemonic                       | opcode         | default size  | Notes
+subpd xmm128, xmm/mem128          | 66 0F 5C /r    | 128           |
+subps xmm128, xmm/mem128          | 0F 5C /r       | 128           |
+subsd xmm64, xmm/mem64            | F2 0F 5C /r    | 64            |
+subss xmm32, xmm/mem32            | F3 0F 5C /r    | 32            |
+
+;; SQRT (SSE)
+;; mnemonic                       | opcode         | default size  | Notes
+sqrtpd xmm128, xmm/mem128         | 66 0F 51 /r    | 128           |
+sqrtps xmm128, xmm/mem128         | 0F 51 /r       | 128           |
+sqrtsd xmm64, xmm/mem64           | F2 0F 51 /r    | 64            |
+sqrtss xmm32, xmm/mem32           | F3 0F 51 /r    | 32            |
+
+;; Float -> Int (SSE)
+;; mnemonic                       | opcode         | default size  | Notes
+cvtss2si reg32, xmm/mem32         | F3 0F 2D /r    | 32            |
+cvtss2si reg64, xmm/mem64         | F3 0F 2D /r    | 32            |
+cvtsd2si reg32, xmm/mem32         | F2 0F 2D /r    | 32            |
+cvtsd2si reg64, xmm/mem64         | F2 0F 2D /r    | 32            |
+
+;; Int -> Float (SSE)
+;; mnemonic                       | opcode         | default size  | Notes
+cvtsi2ss xmm32, reg/mem32         | F3 0F 2A /r    | 32            |
+cvtsi2ss xmm64, reg/mem64         | F3 0F 2A /r    | 32            |
+cvtsi2sd xmm32, reg/mem32         | F2 0F 2A /r    | 32            |
+cvtsi2sd xmm64, reg/mem64         | F2 0F 2A /r    | 32            |
+                                  |                |               |
+
+;; vim: expandtab:ts=2:sw=2:colorcolumn=35,52,68:cursorline
